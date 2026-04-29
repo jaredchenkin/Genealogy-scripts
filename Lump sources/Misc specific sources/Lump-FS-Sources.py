@@ -1,14 +1,16 @@
 import sqlite3
+from sqlite3 import Connection
 import os
 import configparser
 import xml.etree.ElementTree as ET
 import re
 import html
 import contextlib
+import copy
 from typing import TypeAlias
 
-# FS Citation Format: "Collection Name", <i>FamilySearch</i> : Date, Record Name, Record Date"
-cit_re = re.compile(r'"(.+?)", FamilySearch \((.+?) : (.*?)\), ([\w\s\d]+), (.+?)\.')
+# FS Citation Format: FamilySearch (URL : Date), Record Name, Record Date"
+cit_re = re.compile(r'FamilySearch \((.+?) : ([^)]*)\), ([\w\s\d]+)(?:, (.+?))?[.;]')
 
 # Source Name in RM db Format: Principal, Collection Name
 source_name_re = re.compile(r'(.*?), \"(.*?)\"')
@@ -44,7 +46,7 @@ def main():
       return
 
   # Process the database
-  with contextlib.closing(create_DBconnection(database_Path)) as conn:
+  with contextlib.closing(sqlite3.connect(database_Path)) as conn:
     conn.enable_load_extension(True)
     conn.load_extension(RMNOCASE_Path)
     conn.row_factory = sqlite3.Row
@@ -59,23 +61,17 @@ def main():
       fs_repo_id = get_or_create_fs_repo(conn)
       fs_sources = get_existing_fs_sources(conn)
 
-    # TemplateID = 0 is FreeForm template
-    # RM Downloads FamilySearch sources as FreeForm sources
-    # RM puts all the source information into the Footnote/Biblio fields in the source data itself
-    #    not any of the columns in the SourceTable
-    sql="""\
-SELECT SourceID, Name, Fields, TemplateID
-FROM SourceTable
-  WHERE Fields LIKE '%FamilySearch%'
-  AND TemplateID = 0
-    """
+      # TemplateID = 0 is FreeForm template
+      # RM Downloads FamilySearch sources as FreeForm sources
+      # RM puts all the source information into the Footnote/Biblio fields in the source data itself
+      #    not any of the columns in the SourceTable
+      sql="SELECT SourceID, Name, Fields, TemplateID FROM SourceTable WHERE Fields LIKE '%FamilySearch%' AND TemplateID = 0"
 
-    for source in cur.execute(sql):
-      with conn:
+      for source in cur.execute(sql):
         (principal, collection) =  parse_source_name(source['Name'])
+        (citation, url, record_accessed, record_name, record_date) = parse_citation(source['Fields'])
+        citation_name = "{}, {}, \"{}\"".format(principal, record_name, collection)
         
-        (citation, url, record_accessed, record_name, record_date) = parse_citation(source['Fields'], collection)
-
         if collection not in fs_sources:
           fs_source = create_fs_source(conn, collection, fs_template_id, url)
           link_source_to_repo(conn, fs_source['id'], fs_repo_id)
@@ -85,13 +81,11 @@ FROM SourceTable
 
         fields = create_citation_fields(citation, fs_source['template'])
           
-        citation_name = "{}, {}, \"{}\"".format(principal, record_name, collection)
-        citation_id = get_source_citation(conn, source['SourceID'])
+        citation_id = process_citations(conn, source['SourceID'], fs_source['id'], citation_name, fields)
         update_url_owner(conn, citation_id, source['SourceID'])
-        convert_citation(conn, citation_name, citation_id, fs_source['id'], fields)
         delete_old_source(conn, source['SourceID'])
 
-def get_existing_fs_sources(conn) -> SourceList:
+def get_existing_fs_sources(conn: Connection) -> SourceList:
   # Find all existing Sources in the FamilySearch repository:
   # Find the Repository (AddressType = 1) with the name FamilySearch
   # Find all the sources that the FS Repo is used in (OwnerType = 3)
@@ -121,7 +115,7 @@ SELECT st.Name, st.SourceID, st.TemplateID
   
   return sources
 
-def create_fs_source(conn, collection, template_id, url) -> Source:
+def create_fs_source(conn: Connection, collection, template_id, url) -> Source:
     print("=============== Creating new FamilySearch source ===================")
     print(F"Source Name: {collection}")
     print(F"Derived from source url: {url}")
@@ -139,7 +133,7 @@ VALUES (
     new_id = RunSqlNoResult(conn, sql, (collection, template_id, ET.tostring(fields), MOD_DATE))
     return { 'id': new_id, 'template': template_id }
   
-def link_source_to_repo(conn, source_id, repo_id):
+def link_source_to_repo(conn: Connection, source_id, repo_id):
     sql_add_repo = """
 INSERT INTO AddressLinkTable (
   OwnerType, AddressID, OwnerID, AddressNum, Details, UTCModDate
@@ -160,13 +154,14 @@ def create_fs_source_fields(collection):
     
     if G_DEBUG:
       print("source XML START ============================")
-      ET.indent(root)
-      ET.dump(root)
+      debug = copy.deepcopy(root)
+      ET.indent(debug)
+      ET.dump(debug)
       print("source XML END ==============================")
 
     return root
 
-def update_url_owner(conn, citation_id, old_source_id):
+def update_url_owner(conn: Connection, citation_id, old_source_id):
   # Change owner & type columns for relevant web tags so they follow the citationToMove
   sql_url = """\
 UPDATE URLTable
@@ -176,7 +171,42 @@ UPDATE URLTable
   """
   RunSqlNoResult(conn, sql_url, (citation_id, old_source_id))
 
-def convert_citation(conn, citation_name, citation_id, new_source_id, root):
+def delete_old_source(conn, old_source_id):
+  # Remove the old source
+  sql_delete = "DELETE from SourceTable WHERE SourceID = ?"
+  RunSqlNoResult(conn, sql_delete, (old_source_id,))
+
+def process_citations(conn, old_source_id, new_source_id, citation_name, fields) -> str:
+  """
+  Takes the first citation of the original FS source and migrates it to the new source.
+  Sets up the new citation to cover all uses.
+  Any other citations pointing to the old source are redundant and deleted.
+  
+  :param conn: sqlite3.Connection object
+  :param old_source_id: ID of the FS Source created by RM import
+  :param new_source_id: ID of the new lumped FS Source in RM
+  :param citation_name: Citation text to be used in the citation title field
+  :param fields: ElementTree object with xml data for citation fields
+  :returns: ID of the citation created from the original FS source
+  """
+  SqlStmt="SELECT CitationID FROM CitationTable WHERE SourceID = ?"
+  cur = conn.cursor()
+  
+  citation_id: str = None
+  for citation in cur.execute(SqlStmt, (old_source_id,)):
+    if not citation_id:
+      citation_id = citation['CitationID']
+      convert_citation(conn, citation_name, citation_id, new_source_id, fields)
+      convert_citation_links(conn, citation_id, old_source_id)
+    else:
+      RunSqlNoResult(conn, "DELETE FROM CitationTable WHERE CitationID = ?", (citation['CitationID'],))
+  
+  if citation_id is None:
+      raise Exception(F"Source Citation not found for source id #{old_source_id}")
+  
+  return citation_id
+  
+def convert_citation(conn, citation_name, citation_id, new_source_id, fields):
   #  migrate the existing source data to the corresponding citation
   sql_update = """\
 UPDATE CitationTable
@@ -189,29 +219,35 @@ UPDATE CitationTable
   RunSqlNoResult(conn, sql_update, 
                  (citation_name,
                   new_source_id,
-                  ET.tostring(root),
+                  ET.tostring(fields),
                   MOD_DATE,
                   citation_id)
                  )
 
-def delete_old_source(conn, old_source_id):
-  # Remove the old source
-  sql_delete = """\
-DELETE from SourceTable
-  WHERE SourceID = ?  
+def convert_citation_links(conn, citation_id, old_source_id):
   """
-  RunSqlNoResult(conn, sql_delete, (old_source_id,))
+  Repoint Citations from the RM imported FS Source to the new citation for the Lumped FS Source.
 
-def get_source_citation(conn, source_id):
-  # Assumption: RM creates one citation per imported source from FS
-  SqlStmt="SELECT CitationId FROM CitationTable WHERE SourceId = ?"
-  cur = conn.cursor()
-  cur.execute(SqlStmt, (source_id,))
-  res = cur.fetchone()
-  if res is None:
-    raise Exception(F"Source Citation not found for source id #{source_id}")    
-  else:
-    return res['CitationId']
+  TODO: Also moves any citations links that point to the person to point to the person's primary name
+  as Ancestry's new API doesn't return/expect citations to point to the person and should
+  point to the primary name if they aren't pointing to an alternate name already.
+  
+  :param conn: sqlite3.Connection object
+  :param citation_id: ID of the new citation for the Lumped FS Source
+  :param old_source_id: ID of the source created by RM when importing from FS
+  """
+  sql = """\
+UPDATE CitationLinkTable
+SET CitationID = ?, UTCModDate = ?
+WHERE LinkID in
+(
+  SELECT clt.LinkID FROM CitationLinkTable clt 
+  INNER JOIN CitationTable ct USING (CitationID)
+  WHERE ct.SourceID = ?
+    AND clt.CitationID != ?
+) 
+    """
+  RunSqlNoResult(conn, sql, (citation_id, MOD_DATE, old_source_id, citation_id))
 
 def parse_source_name(name):
   m = source_name_re.match(name)
@@ -219,21 +255,18 @@ def parse_source_name(name):
     raise Exception(F"Cant parse source name {name}")
   return m.groups()
 
-def parse_citation(fields: str, collection: str) -> list[str]:
+def parse_citation(fields: str) -> list[str]:
   old_fields = processXmlDataToDOM(fields)
   encoded_citation_text = old_fields.find(".//Fields/Field[Name='Footnote']/Value").text
   citation = html_strip_re.sub('', html.unescape(encoded_citation_text))
 
-  m = cit_re.match(citation)
+  m = cit_re.search(citation)
   if not m:
     raise Exception(F"Can't parse citation text {citation}")
-
-  if collection != m[1]:
-    raise Exception(F"Collections don't match: Source is {collection}, citation is {m[1]}")
   
-  return [citation, *m.groups()[1:]]
+  return [citation, *m.groups()]
 
-def get_or_create_fs_repo(conn):
+def get_or_create_fs_repo(conn: Connection):
   sql = "SELECT AddressID FROM AddressTable WHERE Name = 'FamilySearch'"
   cur = conn.cursor()
   res = cur.execute(sql)
@@ -244,7 +277,7 @@ def get_or_create_fs_repo(conn):
   else:
     return repo_id[0]
   
-def create_repo(conn, name, url):
+def create_repo(conn: Connection, name, url):
     sql_create = """
 INSERT INTO AddressTable (
   AddressType, Name, Street1, Street2, City,State,Zip,Country,
@@ -273,8 +306,9 @@ def create_citation_fields(citation, new_template_id):
 
   if G_DEBUG:
     print("citation XML START ============================")
-    ET.indent(root)
-    ET.dump(root)
+    debug = copy.deepcopy(root)
+    ET.indent(debug)
+    ET.dump(debug)
     print("citation XML END ==============================")
     
   return root
@@ -290,7 +324,7 @@ def create_DBconnection(db_file):
 
     return conn
 
-def GetListOfRows ( conn, SqlStmt):
+def GetListOfRows ( conn: Connection, SqlStmt):
     # SqlStmt should return a set of single values
     cur = conn.cursor()
     cur.execute(SqlStmt)
@@ -301,12 +335,12 @@ def GetListOfRows ( conn, SqlStmt):
         result.append(x)
     return result
 
-def RunSqlNoResult(db_connection, SqlStmt):
+def RunSqlNoResult(db_connection: Connection, SqlStmt):
     cur = db_connection.cursor()
     res = cur.execute(SqlStmt)
     return res.lastrowid
 
-def RunSqlNoResult ( conn, SqlStmt, myTuple):
+def RunSqlNoResult ( conn: Connection, SqlStmt, myTuple):
     cur = conn.cursor()
     res = cur.execute(SqlStmt, myTuple)
     return res.lastrowid
