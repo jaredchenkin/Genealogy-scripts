@@ -39,6 +39,7 @@ FactType:
 General Rules:
 0 - Person
 1 - Family
+2 - Event
 3 - Source
 4 - Citation
 5 - Place

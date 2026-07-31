@@ -19,5 +19,16 @@
     "editor.foldingStrategy": "auto",
     "python.useEnvironmentsExtension": true,
     "terminal.integrated.accessibleViewPreserveCursorPosition": true,
-    "terminal.integrated.defaultProfile.windows": "Command Prompt"
+    "terminal.integrated.defaultProfile.windows": "Command Prompt",
+    "[python]": {
+        "diffEditor.ignoreTrimWhitespace": false,
+        "editor.defaultColorDecorators": "never",
+        "gitlens.codeLens.symbolScopes": [
+            "!Module"
+        ],
+        "editor.formatOnType": true,
+        "editor.wordBasedSuggestions": "off",
+        "editor.tabSize": 2,
+        "editor.defaultFormatter": "ms-python.autopep8"
+    }
 }
