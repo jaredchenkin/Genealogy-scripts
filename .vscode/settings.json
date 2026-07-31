@@ -28,7 +28,10 @@
         ],
         "editor.formatOnType": true,
         "editor.wordBasedSuggestions": "off",
-        "editor.tabSize": 2,
-        "editor.defaultFormatter": "ms-python.autopep8"
-    }
+        "editor.tabSize": 4,
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false
+    },
+    "python.analysis.typeCheckingMode": "off"
 }

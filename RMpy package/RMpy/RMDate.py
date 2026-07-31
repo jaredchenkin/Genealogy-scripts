@@ -1,14 +1,15 @@
 import sys
 from pathlib import Path
 sys.path.append( r'.' )
-from sqlite3 import Connection
+
 import RMpy.common as RMc  # type: ignore
-import juliandate as jd
-from datetime import datetime as dt
+
 #from enum import Enum
 import enum
 from datetime import date
 
+import juliandate as jd
+from datetime import datetime as dt
 
 
 # RM Internal Date structure
@@ -527,7 +528,7 @@ class RMdate_structure:
         raise Exception(
             "Malformed RM Date: unsupported offset: " + offset)
 
-    def get_str_1(self, type, format )-> str:
+    def get_str_1(self, type, format : Format)-> str:
         for date_type in RMdate_structure._data:
             if type == date_type[0]:
                 if format == Format.SHORT:
@@ -598,7 +599,7 @@ class RMdate_confidence:
                 return date_type[0]
         raise Exception("Malformed RM Date: Confidence character unknown")
 
-    def get_str(self, type, format)-> str:
+    def get_str(self, type, format : Format)-> str:
         for date_type in RMdate_confidence._data:
             if type == date_type[0]:
                 if format == Format.SHORT:
