@@ -38,6 +38,7 @@ def create_db_connection(
             for extension in db_extension_file_path_list:
                 dbConnection.load_extension(str(extension))
         yield dbConnection
+        dbConnection.commit()
     except DatabaseError as e:
         dbConnection.rollback()
         raise RM_Py_Exception(e, "\n\n" "SQLITE error." "\n")
@@ -45,7 +46,6 @@ def create_db_connection(
         dbConnection.rollback()
         raise e
     finally:
-        dbConnection.commit()
         dbConnection.close()
 
 

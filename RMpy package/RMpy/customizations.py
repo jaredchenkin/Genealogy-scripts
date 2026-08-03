@@ -1,9 +1,5 @@
-import sys
-from pathlib import Path
-
-sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1] / "RMpy package")))
-import RMpy.common as RM  # noqa #type: ignore
-import RMpy.RMDate as RMdate  # noqa #type: ignore
+from . import common as RM  # noqa #type: ignore
+from . import RMDate as RMdate  # noqa #type: ignore
 
 VITAL_RECORDS = "Vital Records (ancestry compatible)"
 
