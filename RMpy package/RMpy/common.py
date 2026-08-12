@@ -11,12 +11,10 @@ from typing import Any, Generator
 import configparser
 import enum
 import xml.etree.ElementTree as ET
-from . import RMDate as RMdate
 import itertools
 import copy
 
 # ===================================================DIV60==
-
 
 @contextmanager
 def create_db_connection(
@@ -202,7 +200,7 @@ class SourceTemplateField:
             ET.SubElement(field, "Hint").text = self.hint
         if self.long_hint:
             ET.SubElement(field, "LongHint").text = self.long_hint
-        ET.SubElement(field, "CitationField").text = self.citation
+        ET.SubElement(field, "CitationField").text = str(self.citation)
 
         return field
 
@@ -238,7 +236,7 @@ class SourceTemplate:
 INSERT INTO SourceTemplateTable (
   Name, Description, Favorite, Category, Footnote, ShortFootnote, Bibliography, FieldDefs, UTCModDate
 ) VALUES (
-  ?, ?, 0, ?, ?, ?, ?, ?
+  ?, ?, 0, ?, ?, ?, ?, ?, julianday('now') - 2415018.5
 )
 """
         template_id = -1
@@ -257,8 +255,7 @@ INSERT INTO SourceTemplateTable (
                     self.footnote,
                     self.short_footnote,
                     self.bibliography,
-                    ET.tostring(self.to_xml()),
-                    RMdate.get_MOD_DATE(),
+                    ET.tostring(self.to_xml())
                 ),
             )
 
@@ -271,12 +268,12 @@ INSERT INTO SourceTemplateTable (
 def find_source_template(conn: Connection, name):
     sql = "SELECT TemplateID FROM SourceTemplateTable where Name = ?"
     cur = conn.execute(sql, (name,))
-    if cur:
-        return cur.fetchone()[0]
+    res = cur.fetchone()
+    if res:
+        return res[0]
     else:
         return None
-
-
+    
 # ===================================================DIV60==
 
 INSERT_WEBLINK_STMT = """\
@@ -284,7 +281,7 @@ INSERT INTO URLTable (
   'OwnerType', 'OwnerID', 'LinkType', 'Name', 'URL', 'Note', 'UTCModDate'
 )
 VALUES (
-  ?, ?, 0, ?, ?, '', ?  
+  ?, ?, 0, ?, ?, '', julianday('now') - 2415018.5
 )
 """
 
@@ -293,7 +290,7 @@ def add_weblink(conn: Connection, name, url, owner_id, owner_type: OwnerType):
     run_sql(
         conn,
         INSERT_WEBLINK_STMT,
-        (owner_type, owner_id, name, url, RMdate.get_MOD_DATE()),
+        (owner_type, owner_id, name, url),
     )
 
 
@@ -309,8 +306,7 @@ def add_weblinks(conn: Connection, data=None, **kwargs):
             kwargs["owner_types"],
             kwargs["owners"],
             kwargs["names"],
-            kwargs["urls"],
-            [RMdate.get_MOD_DATE()] * len(kwargs["names"]),
+            kwargs["urls"]
         )
 
     conn.executemany(INSERT_WEBLINK_STMT, data)
@@ -321,22 +317,23 @@ def add_weblinks(conn: Connection, data=None, **kwargs):
 
 
 def create_source(
-    conn: Connection, name: str, template_id: str | int, fields: ET.Element, url=None
+    conn: Connection, name: str, template_id: str | int, fields: dict|ET.Element, url=None
 ):
     sql = """\
 INSERT INTO SourceTable (
   'Name','RefNumber','ActualText','Comments','IsPrivate','TemplateID','Fields','UTCModDate'
 )
 VALUES (
-    ?,"","","",0,?,?,?
+    ?,"","","",0,?,?,julianday('now') - 2415018.5
 )
     """
+    root = wrap_fields(fields)
     source_id = run_sql(
-        conn, sql, (name, template_id, ET.tostring(fields), RMdate.get_MOD_DATE())
+        conn, sql, (name, template_id, ET.tostring(root))
     )
     if not source_id:
         raise RM_Py_Exception(
-            f"unable to create new source {name} {template_id}\n{ET.tostring(fields)}"
+            f"unable to create new source {name} {template_id}\n{ET.tostring(root)}"
         )
     if url:
         add_weblink(conn, "", url, source_id, OwnerType.SOURCE)
@@ -356,23 +353,16 @@ INSERT INTO CitationTable(
   SourceID, Comments, ActualText, RefNumber, Footnote, ShortFootnote, Bibliography, Fields, UTCModDate, CitationName
 )
 VALUES (
-  ?, '', '', ?, '', '', '', ?, ?, ? 
+  ?, '', '', ?, '', '', '', ?, julianday('now') - 2415018.5, ? 
 )    
 """
 
 
-def create_citation(
-    conn: Connection,
-    source_id: str,
-    ref_num: str,
-    name: str,
-    fields: ET.Element,
-    url=None,
-):
+def create_citation(conn: Connection, source_id: str, ref_num: str, name: str, fields: dict|ET.Element, url=None):
     """
     :returns: new citation ID
     """
-    data = (source_id, ref_num, ET.tostring(fields), RMdate.get_MOD_DATE(), name)
+    data = (source_id, ref_num, ET.tostring(wrap_fields(fields)), name)
     citation_id = run_sql(conn, INSERT_CITATION_STMT, data)
     if url:
         add_weblink(conn, name, url, citation_id, OwnerType.CITATION)
@@ -380,6 +370,10 @@ def create_citation(
 
 
 def create_citations(conn: Connection, data=None, **kwargs):
+    """
+    kwargs: source_ids, ref_nums, fields: ET.Element, names
+    returns: (first_citation_id, last_citation_id)
+    """
     if not data:
         for a, b in itertools.combinations(
             [len(a) for a in kwargs.values() if type(a) is list], 2
@@ -391,8 +385,7 @@ def create_citations(conn: Connection, data=None, **kwargs):
             kwargs["source_ids"],
             kwargs["ref_nums"],
             map(ET.tostring, kwargs["fields"]),
-            [RMdate.get_MOD_DATE()] * len(kwargs["names"]),
-            kwargs["names"],
+            kwargs["names"]
         )
 
     next_citation_id = (
@@ -412,7 +405,7 @@ INSERT INTO CitationLinkTable(
   CitationID, OwnerType, OwnerID, SortOrder, Quality, IsPrivate, Flags, UTCModDate
 )
 VALUES (
-  ?, ?, ?, 0, '~~~', 0, 0, ?
+  ?, ?, ?, 0, '~~~', 0, 0, julianday('now') - 2415018.5
 )
 """
 
@@ -423,7 +416,7 @@ def create_citation_link(
     run_sql(
         conn,
         INSERT_CITATION_LINK_STMT,
-        (citation_id, owner_type, owner_id, RMdate.get_MOD_DATE()),
+        (citation_id, owner_type, owner_id),
     )
 
 
@@ -438,8 +431,7 @@ def create_citation_links(conn: Connection, data=None, **kwargs):
         data = zip(
             kwargs["citation_ids"],
             kwargs["owner_types"],
-            kwargs["owners"],
-            [RMdate.get_MOD_DATE()] * len(kwargs["owners"]),
+            kwargs["owners"]
         )
 
         conn.executemany(INSERT_CITATION_LINK_STMT, data)
@@ -479,6 +471,12 @@ def create_xml_field(name, value):
     ET.SubElement(el, "Value").text = value
     return el
 
+def wrap_fields(fields: str|ET.Element):
+    root = ET.Element("Root")
+    if isinstance(fields, dict):
+        fields = create_xml_fields(fields)
+    root.append(fields)
+    return root
 
 # ===================================================DIV60==
 def create_repo(conn: Connection, name, url):
@@ -491,10 +489,10 @@ INSERT INTO AddressTable (
 VALUES (
   1, ?, '', '', '', '', '', '', 
   '', '', '', '', ?, 0, 0, '', 
-  ?
+  julianday('now') - 2415018.5
 )
     """
-    return run_sql(conn, sql_create, (name, url, RMdate.get_MOD_DATE()))
+    return run_sql(conn, sql_create, (name, url))
 
 
 def link_source_to_repo(conn: Connection, source_id, repo_id):
@@ -502,11 +500,11 @@ def link_source_to_repo(conn: Connection, source_id, repo_id):
 INSERT INTO AddressLinkTable (
   OwnerType, AddressID, OwnerID, AddressNum, Details, UTCModDate
 ) VALUES (
-  ?,?,?,0,"",?
+  ?,?,?,0,"",julianday('now') - 2415018.5
 )
     """
     conn.execute(
-        sql_add_repo, (OwnerType.SOURCE, repo_id, source_id, RMdate.get_MOD_DATE())
+        sql_add_repo, (OwnerType.SOURCE, repo_id, source_id)
     )
 
 

@@ -1,2 +1,1 @@
 getmyancestors>=1.1.2
-juliandate>=1.0.5

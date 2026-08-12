@@ -6,7 +6,7 @@ import re
 from urllib.parse import urlsplit, SplitResult
 import xml.etree.ElementTree as ET
 import signal
-
+import sqlite3
 from getmyancestors.classes.tree import Tree, Source, Indi
 from getmyancestors.classes.session import Session
 
@@ -31,7 +31,7 @@ def main():
 
     try:
         parser.error = parser.exit
-        args = parser.parse_args(["L8M6-6BH"])
+        args = parser.parse_args() #(["L8M6-6BH"])
     except SystemExit:
         parser.print_help(file=sys.stderr)
         sys.exit(2)
@@ -235,11 +235,12 @@ def get_fs_source_target(sources: list[Source]) -> Source:
     return sources[fs_source - 1]
 
 
-def get_rmid_from_fsid(conn: Connection, fsid: str) -> int:
+def get_rmid_from_fsid(conn: Connection, fsid: str):
     sql = "SELECT rmID FROM FamilySearchTable WHERE fsID = ?"
     cur = conn.execute(sql, (fsid,))
-    if cur:
-        return cur.fetchone()[0]
+    res = cur.fetchone()
+    if res:
+        return res[0]
     else:
         raise RM.RM_Py_Exception("Can't find person with FSID " + fsid)
 
@@ -271,7 +272,7 @@ def process_source(
     citation_name = FS.make_citation_name(fs_source.title, citation)
 
     source_id = FS.find_source(conn, source_name)
-    source_info["type"] = None
+    source_info = dict(type=None)
     new_citation_fields = {}
     source_root = ET.Element("Root")
     source_info = {}
@@ -305,7 +306,7 @@ def process_source(
                     conn, source_name, source_root, source_info, collection_url
                 )
             new_citation_fields = build_vital_citation_fields(
-                principal_name, citation_fields["record_date"]
+                principal_name, citation_fields["record_date"], source_info["type"]
             )
         case "Census":
             if "United States" in source_info["title"]:
@@ -418,6 +419,7 @@ def make_new_source(conn, name, root, template_id, fields={}, collection_url=Non
         root.append(RM.create_xml_fields(fields))
         print(f"New fields are: \n{fields}")
     print(f"Linked to url {collection_url}")
+    input("Press any key to continue...")
     source_id = RM.create_source(conn, name, template_id, root, collection_url)
     RM.link_source_to_repo(conn, source_id, FS.get_or_create_fs_repo(conn))
     return source_id
@@ -434,8 +436,8 @@ def make_vital_source_fields(data: dict):
     )
 
 
-def build_vital_citation_fields(name, date):
-    return dict(Person=name, Date=date)
+def build_vital_citation_fields(name, date, event_type):
+    return dict(Person=name, Type=event_type, Date=date)
 
 
 def make_us_federal_census_fields(data):

@@ -1,5 +1,4 @@
 from . import common as RM  # noqa #type: ignore
-from . import RMDate as RMdate  # noqa #type: ignore
 
 VITAL_RECORDS = "Vital Records (ancestry compatible)"
 
@@ -13,7 +12,7 @@ _vital_records = RM.SourceTemplate(
         RM.SourceTemplateField("RepositoryLoc", RM.FieldType.PLACE),
         RM.SourceTemplateField("Person", RM.FieldType.NAME, "Name of Person(s)", True),
         RM.SourceTemplateField("Date", RM.FieldType.DATE, "Certificate Date", True),
-        # RM.SourceTemplateField('Type', RM.FieldType.TEXT, 'Certificate Type', True),
+        RM.SourceTemplateField('Type', RM.FieldType.TEXT, 'Certificate Type', True),
         RM.SourceTemplateField(
             "CertificateNo", RM.FieldType.TEXT, "Certificate Number", True
         ),
@@ -27,10 +26,18 @@ Derived from Vital Records (state, certificates)""",
 )
 
 
-def setup():
+def customize():
     config = RM.get_config()
 
     with RM.create_db_connection(
-        config["FILE_PATHS"]["DB_PATH"], config["FILE_PATHS"]["RMNOCASE_PATH"]
+        config["FILE_PATHS"]["DB_PATH"], [config["FILE_PATHS"]["RMNOCASE_PATH"]]
     ) as conn:
         _vital_records.create(conn)
+
+
+def main():
+    customize()
+
+
+if __name__ == "__main__":
+    main()

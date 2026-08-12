@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from sqlite3 import Connection
 import xml.etree.ElementTree as ET
 import sys
@@ -6,7 +7,6 @@ from pathlib import Path
 sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1] / "RMpy package")))
 
 import RMpy.common as RM  # noqa #type: ignore
-import RMpy.RMDate as RMdate  # noqa #type: ignore
 import RMpy.familysearch as FS
 
 G_DEBUG = False
@@ -25,7 +25,6 @@ def main():
     # Process the database
     with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
         cur = conn.cursor()
-        MOD_DATE = RMdate.get_MOD_DATE()
 
         fs_source_id = get_or_create_fs_person_source(conn)
         citations = dict(fields=[], names=[], ref_nums=[])
@@ -93,8 +92,7 @@ def get_or_create_fs_person_source(conn: Connection) -> int:
     title = "FamilySearch Family Tree Individual"
     sql = "SELECT SourceID FROM SourceTable WHERE Name = ?"
 
-    cur = conn.cursor()
-    cur.execute(sql, (name,))
+    cur = conn.execute(sql, (name,))
     res = cur.fetchone()
 
     repo_id = FS.get_or_create_fs_repo(conn)

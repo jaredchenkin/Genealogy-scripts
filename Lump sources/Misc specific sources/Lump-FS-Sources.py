@@ -5,8 +5,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[2] / "RMpy package")))
-import RMpy.common as RMc
-import RMpy.RMDate as RMdate
+import RMpy.common as RM
 import RMpy.familysearch as FS
 
 from typing import TypeAlias
@@ -29,14 +28,14 @@ SourceList: TypeAlias = dict[str, Source]
 
 def main():
     global MOD_DATE
-    config = RMc.get_config()
+    config = RM.get_config()
 
     # Read file paths from ini file
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
 
     # Process the database
-    with RMc.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
 
         fs_template_id = "439"  # get_or_create_fs_template(conn)
         fs_repo_id = FS.get_or_create_fs_repo(conn)
@@ -92,7 +91,7 @@ def create_fs_source(
     if new_id:
         return {"id": new_id, "template": template_id}
     else:
-        raise RMc.RM_Py_Exception(
+        raise RM.RM_Py_Exception(
             "Unable to create new FamilySearch source: " + collection
         )
 
@@ -152,7 +151,7 @@ UPDATE CitationTable
             citation_name,
             new_source_id,
             ET.tostring(fields),
-            RMdate.get_MOD_DATE(),
+            RM.UTC_MOD_DATE,
             citation_id,
         ),
     )
@@ -181,7 +180,7 @@ WHERE LinkID in
     AND clt.CitationID != ?
 ) 
     """
-    conn.execute(sql, (citation_id, RMdate.get_MOD_DATE(), old_source_id, citation_id))
+    conn.execute(sql, (citation_id, RM.UTC_MOD_DATE, old_source_id, citation_id))
 
 
 def parse_citation(fields: str) -> list[str]:

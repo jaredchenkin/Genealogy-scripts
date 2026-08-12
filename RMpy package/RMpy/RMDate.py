@@ -8,8 +8,6 @@ import RMpy.common as RMc  # type: ignore
 import enum
 from datetime import date
 
-import juliandate as jd
-from datetime import datetime as dt
 
 
 # RM Internal Date structure
@@ -654,7 +652,3 @@ def NumToMonthStr(MonthNum : int, style : Format)-> str:
     return Months[MonthNum][index]
 
 # ===================================================DIV60==
-
-def get_MOD_DATE() -> float:
-    # Ref: https://sqlitetoolsforrootsmagic.com/date-last-edited/
-    return jd.from_gregorian(*dt.today().timetuple()[0:6])  - 2415018.5
