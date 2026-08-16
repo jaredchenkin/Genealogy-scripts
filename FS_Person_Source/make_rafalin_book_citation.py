@@ -76,7 +76,7 @@ def get_or_create_book_source(conn) -> int:
             "WebsiteTitle":"Family Search",
             "URL":url
         }
-        return RM.create_source(conn, source_template_id, fields, url)
+        return RM.create_source(conn, source_template_id, fields, ref_num, url)
 
 # ================================================================
 # Call the "main" function

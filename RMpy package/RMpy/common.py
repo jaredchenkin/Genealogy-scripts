@@ -16,10 +16,20 @@ import copy
 
 # ===================================================DIV60==
 
+
 @contextmanager
 def create_db_connection(
     db_file_path, db_extension_file_path_list
 ) -> Generator[Connection, Any, None]:
+    """Manages the RootsMagic database file object and tries to gracefully handle errors
+
+    Args:
+        db_file_path (str): Path to the database
+        db_extension_file_path_list (list[str]): List of paths to any database extension files to load
+
+    Yields:
+        conn (sqlite3.Connection): The opened sqlite connection object
+    """
 
     if not os.path.exists(db_file_path):
         print("Database path not found. Fix configuration file and try again.")
@@ -60,11 +70,6 @@ def get_config() -> configparser.ConfigParser:
     return config
 
 
-def run_sql(conn: sqlite3.Connection, statement, values=()):
-    cur = conn.execute(statement, values)
-    return cur.lastrowid
-
-
 # ===================================================DIV60==
 def get_SQLite_library_version(dbConnection):
 
@@ -82,7 +87,7 @@ def time_stamp_now(type=None):
     now = datetime.now()
     if type is None:
         dt_string = now.strftime("%Y-%m-%d %H:%M:%S")
-    elif type == 'file':
+    elif type == "file":
         dt_string = now.strftime("%Y-%m-%d_%H%M%S")
     return dt_string
 
@@ -126,7 +131,7 @@ def launched_from_explorer():
 # ===================================================DIV60==
 def pause_with_message(message=None):
     # Don't pause when running from a terminal or when input output is redirected
-    if (message != None):
+    if message != None:
         print(str(message))
     if launched_from_explorer():
         input("\n" "Press the <Enter> key to continue...")
@@ -138,7 +143,7 @@ def get_current_directory(script_path: Path) -> Path:
 
     # Determine if application is a script file or frozen exe and get its directory
     # see   https://pyinstaller.org/en/stable/runtime-information.html
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         application_path = (Path(sys.executable)).parent
     else:
         application_path = script_path
@@ -147,8 +152,7 @@ def get_current_directory(script_path: Path) -> Path:
 
 # ===================================================DIV60==
 class RM_Py_Exception(Exception):
-
-    '''Exceptions thrown for configuration/database/application logic issues'''
+    """Exceptions thrown for configuration/database/application logic issues"""
 
 
 # ===================================================DIV60==
@@ -255,7 +259,7 @@ INSERT INTO SourceTemplateTable (
                     self.footnote,
                     self.short_footnote,
                     self.bibliography,
-                    ET.tostring(self.to_xml())
+                    ET.tostring(self.to_xml()),
                 ),
             )
 
@@ -273,7 +277,8 @@ def find_source_template(conn: Connection, name):
         return res[0]
     else:
         return None
-    
+
+
 # ===================================================DIV60==
 
 INSERT_WEBLINK_STMT = """\
@@ -287,15 +292,25 @@ VALUES (
 
 
 def add_weblink(conn: Connection, name, url, owner_id, owner_type: OwnerType):
-    run_sql(
-        conn,
-        INSERT_WEBLINK_STMT,
-        (owner_type, owner_id, name, url),
-    )
+    conn.execute(INSERT_WEBLINK_STMT, (owner_type, owner_id, name, url))
 
 
 def add_weblinks(conn: Connection, data=None, **kwargs):
-    if not data:
+    """Creates multiple weblinks
+
+    Args:
+        data (list[tuple[OwnerType, str, str, str]]): list of tuples (OwnerType, owner_id, name, url)
+
+    Keyword Args:
+        owner_types (list[OwnerType])
+        owners (list[str])
+        names (list[str])
+        urls (list[str])
+
+    Returns:
+        None
+    """
+    if data is None:
         for a, b in itertools.combinations(
             [len(a) for a in kwargs.values() if type(a) is list], 2
         ):
@@ -303,10 +318,7 @@ def add_weblinks(conn: Connection, data=None, **kwargs):
                 raise RM_Py_Exception("All input lists need to be same size")
 
         data = zip(
-            kwargs["owner_types"],
-            kwargs["owners"],
-            kwargs["names"],
-            kwargs["urls"]
+            kwargs["owner_types"], kwargs["owners"], kwargs["names"], kwargs["urls"]
         )
 
     conn.executemany(INSERT_WEBLINK_STMT, data)
@@ -317,20 +329,25 @@ def add_weblinks(conn: Connection, data=None, **kwargs):
 
 
 def create_source(
-    conn: Connection, name: str, template_id: str | int, fields: dict|ET.Element, url=None
+    conn: Connection,
+    name: str,
+    template_id: str | int,
+    fields: dict | ET.Element,
+    ref_num="",
+    url=None,
 ):
     sql = """\
 INSERT INTO SourceTable (
   'Name','RefNumber','ActualText','Comments','IsPrivate','TemplateID','Fields','UTCModDate'
 )
 VALUES (
-    ?,"","","",0,?,?,julianday('now') - 2415018.5
+    ?,?,"","",0,?,?,julianday('now') - 2415018.5
 )
     """
     root = wrap_fields(fields)
-    source_id = run_sql(
-        conn, sql, (name, template_id, ET.tostring(root))
-    )
+    source_id = conn.execute(
+        sql, (name, ref_num, template_id, ET.tostring(root))
+    ).lastrowid
     if not source_id:
         raise RM_Py_Exception(
             f"unable to create new source {name} {template_id}\n{ET.tostring(root)}"
@@ -343,7 +360,7 @@ VALUES (
 def delete_source(conn: Connection, source_id):
     # Remove the old source
     sql_delete = "DELETE from SourceTable WHERE SourceID = ?"
-    return run_sql(conn, sql_delete, (source_id,))
+    conn.execute(sql_delete, (source_id,))
 
 
 # ===================================================DIV60==
@@ -358,23 +375,43 @@ VALUES (
 """
 
 
-def create_citation(conn: Connection, source_id: str, ref_num: str, name: str, fields: dict|ET.Element, url=None):
-    """
-    :returns: new citation ID
+def create_citation(
+    conn: Connection,
+    source_id: str,
+    ref_num: str,
+    name: str,
+    fields: dict | ET.Element,
+    url=None,
+):
+    """Creates a new citation
+    Returns:
+        new citation ID
     """
     data = (source_id, ref_num, ET.tostring(wrap_fields(fields)), name)
-    citation_id = run_sql(conn, INSERT_CITATION_STMT, data)
+    citation_id = conn.execute(INSERT_CITATION_STMT, data).lastrowid
+    if not citation_id:
+        raise RM_Py_Exception(f"Unable to create citation for {name}")
     if url:
         add_weblink(conn, name, url, citation_id, OwnerType.CITATION)
     return citation_id
 
 
 def create_citations(conn: Connection, data=None, **kwargs):
+    r"""Creates multiple citations
+
+    Args:
+        data (list[tuple[int, int, ET.Element, str]]): tuple of source_id, ref_num, fields, name
+
+    Keyword Args:
+        source_ids (list[int]): List of source IDs
+        ref_nums (list[int]): List of reference numbers
+        fields (list[ET.Element]): List of fields XML elements
+        names (list[str]): List of names
+
+    Returns:
+        (first_citation_id, last_citation_id)
     """
-    kwargs: source_ids, ref_nums, fields: ET.Element, names
-    returns: (first_citation_id, last_citation_id)
-    """
-    if not data:
+    if data is None:
         for a, b in itertools.combinations(
             [len(a) for a in kwargs.values() if type(a) is list], 2
         ):
@@ -385,12 +422,15 @@ def create_citations(conn: Connection, data=None, **kwargs):
             kwargs["source_ids"],
             kwargs["ref_nums"],
             map(ET.tostring, kwargs["fields"]),
-            kwargs["names"]
+            kwargs["names"],
         )
 
-    next_citation_id = (
-        conn.execute("SELECT MAX(CitationID) FROM CitationTable;").fetchone()[0] + 1
-    )
+    max = conn.execute("SELECT MAX(CitationID) FROM CitationTable;").fetchone()
+    if max:
+        next_citation_id = max[0] + 1
+    else:
+        raise RM_Py_Exception("Couldn't get number of rows in the CitationTable")
+
     cur = conn.executemany(INSERT_CITATION_STMT, data)
     conn.commit()
 
@@ -413,26 +453,18 @@ VALUES (
 def create_citation_link(
     conn: Connection, citation_id, owner_id, owner_type: OwnerType
 ):
-    run_sql(
-        conn,
-        INSERT_CITATION_LINK_STMT,
-        (citation_id, owner_type, owner_id),
-    )
+    conn.execute(INSERT_CITATION_LINK_STMT, (citation_id, owner_type, owner_id))
 
 
 def create_citation_links(conn: Connection, data=None, **kwargs):
-    if not data:
+    if data is None:
         for a, b in itertools.combinations(
             [len(a) for a in kwargs.values() if type(a) is list], 2
         ):
             if a != b:
                 raise RM_Py_Exception("All input lists need to be same size")
 
-        data = zip(
-            kwargs["citation_ids"],
-            kwargs["owner_types"],
-            kwargs["owners"]
-        )
+        data = zip(kwargs["citation_ids"], kwargs["owner_types"], kwargs["owners"])
 
         conn.executemany(INSERT_CITATION_LINK_STMT, data)
         conn.commit()
@@ -471,12 +503,14 @@ def create_xml_field(name, value):
     ET.SubElement(el, "Value").text = value
     return el
 
-def wrap_fields(fields: str|ET.Element):
+
+def wrap_fields(fields: str | ET.Element):
     root = ET.Element("Root")
     if isinstance(fields, dict):
         fields = create_xml_fields(fields)
     root.append(fields)
     return root
+
 
 # ===================================================DIV60==
 def create_repo(conn: Connection, name, url):
@@ -492,7 +526,11 @@ VALUES (
   julianday('now') - 2415018.5
 )
     """
-    return run_sql(conn, sql_create, (name, url))
+    cur = conn.execute(sql_create, (name, url))
+    if cur:
+        return cur.lastrowid
+    else:
+        return None
 
 
 def link_source_to_repo(conn: Connection, source_id, repo_id):
@@ -503,9 +541,7 @@ INSERT INTO AddressLinkTable (
   ?,?,?,0,"",julianday('now') - 2415018.5
 )
     """
-    conn.execute(
-        sql_add_repo, (OwnerType.SOURCE, repo_id, source_id)
-    )
+    conn.execute(sql_add_repo, (OwnerType.SOURCE, repo_id, source_id))
 
 
 # ===================================================DIV60==

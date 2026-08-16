@@ -27,34 +27,35 @@ def main():
         cur = conn.cursor()
 
         fs_source_id = get_or_create_fs_person_source(conn)
-        citations = dict(fields=[], names=[], ref_nums=[])
+        citations = []
         urls = []
+        names =[]
+        owners = []
 
         for to_link in find_missing_links(conn, fs_source_id):
             name = f"{to_link['Name']}, individual in FamilySearch Family Tree"
             urls.append(f"https://familysearch.org/en/tree/person/{to_link['fsID']}")
-            citations["names"].append(name)
-            citations["fields"].append(create_citation_fields(name))
-            citations["ref_nums"].append(to_link["fsID"])
+            names.append(name)
+            citations.append((fs_source_id, name, create_citation_fields(name), to_link["fsID"]))
             updated.append((to_link["Name"], to_link["PersonID"]))
+            owners.append(to_link["PersonID"])
 
         size = len(updated)
-        citations["source_ids"] = [fs_source_id] * size
 
-        citations_results = RM.create_citations(conn, **citations)
+        citations_results = RM.create_citations(conn, citations)
         if citations_results:
             RM.create_citation_links(
                 conn,
                 citation_ids=range(citations_results[0], citations_results[1] + 1),
                 owner_types=[RM.OwnerType.PERSON] * size,
-                owners=[u[1] for u in updated],
+                owners=owners,
             )
             RM.add_weblinks(
                 conn,
                 urls=urls,
                 owners=range(citations_results[0], citations_results[1] + 1),
                 owner_types=[RM.OwnerType.CITATION] * size,
-                names=citations["names"],
+                names=names,
             )
 
     if len(updated) > 0:
