@@ -1,5 +1,39 @@
 # Genealogy-scripts and utilities
 
+Hi 👋 I'm Jared and I've forked Richard's repo so I can make some customized workflows for my RM database.
+Having all of this work to use as inspiration is immensely helpful. Cheers! 🍻
+
+I have done some small reorganizating to make things a bit more DRY and reusable for me. 
+I've also added a dependency on a python project called `getmyancestors`, which has FamilySearch login and a great data model for managing most important objects.
+Since most of my work currently entails replicating the work I've been doing in FamilySearch over the past 8 or so years into my own personal tree and database,
+I found that I wanted to customize some aspects of how RM imported things from FS and pushed to Ancestry, and how I wanted to handle various sources.
+To safely use the repo, then, I recommend setting up a [virtual environment](https://docs.python.org/3/library/venv.html):
+
+```bash
+$ pyton3 -m venv .venv
+$ source .venv/bin/activate  # or activate.ps1 for PowerShell
+$ pip install -U -r requirements.txt
+```
+After that, you only need to do the second step to access the dependencies. The other option is to just manage the pip package globally (run the third command once), but python tends to discourage that.
+
+All of my scripts are in `FS_Person_Source`, as well as `Lump sources/Misc specific sources/Lump-FS-Sources.py`.
+Right now, the only script that uses `getmyancestors` directly is `FS_PersonSource/get_fs_source.py`, so python shouldn't complain running any other scripts.
+I mostly just use `FS_Person_Source/make_fs_person_sources.py` which  creates a generic citation for every FS person in my RM data so that I can have a direct reference from Ancestry back to that FS person.
+
+I also moved some common functionality into RMpy/common.py, and refactored `create_database_connection()` to use python's context manager.
+That way I can use it directly in a `with` statement, and have a little less boilerplate.
+I also skip a lot of the configuration and setup. I don't use RMpy/launcher.py, but just run everthing directly (which is where some of the sqlite connection
+handling was). That all started because my first script was `Lump-FS-Sources.py`, which I modeled after the other Lump sources scripts in that directory. 
+Those run directly and skip launcher so that became my model.
+I also made a helper method `get_config()` in `common.py` that looks for a `config.ini` in the repository root and returns the `ConfigParser` of that.
+Since I code in Linux, I symlink any config I need from a subdirectory to that location, which seemed more straightforward to me.
+
+My scripts aren't as polished, and they aren't meant to be. Some are very specific with hardcoded stuff and not meant to be reused for anything else.
+
+Now, back to Richard...
+
+---
+
 updated: 2025-11-21
 
 These are scripts I've written to help my work with RootsMagic genealogy software.
