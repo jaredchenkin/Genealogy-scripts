@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime, timedelta
 
-DB_PATH = r"C:\Users\rotter\Genealogy\GeneDB\Otter-Saito.rmtree"
+DB_PATH = r"DB\TEST-Married women witout married name.rmtree"
 
 # FactType codes (adjust if needed)
 FACTTYPE_MARRIAGE = 300  # Marriage event
