@@ -335,6 +335,7 @@ def create_source(
     fields: dict | ET.Element,
     ref_num="",
     url=None,
+    verbose=False
 ):
     sql = """\
 INSERT INTO SourceTable (
@@ -344,6 +345,7 @@ VALUES (
     ?,?,"","",0,?,?,julianday('now') - 2415018.5
 )
     """
+    fields = create_xml_fields(fields)
     root = wrap_fields(fields)
     source_id = conn.execute(
         sql, (name, ref_num, template_id, ET.tostring(root))
@@ -352,10 +354,22 @@ VALUES (
         raise RM_Py_Exception(
             f"unable to create new source {name} {template_id}\n{ET.tostring(root)}"
         )
+    if verbose:
+        print(f"Created new source with ID {source_id}")
     if url:
         add_weblink(conn, "", url, source_id, OwnerType.SOURCE)
     return source_id
 
+def get_source(conn: Connection, name, verbose=False):
+    sql = "SELECT SourceID FROM SourceTable WHERE Name = ?"
+    cur = conn.execute(sql, (name,))
+    res = cur.fetchone()
+    if res:
+        if verbose:
+            print(f"Found Source with ID {res[0]}")
+        return res[0]
+    else:
+        return None
 
 def delete_source(conn: Connection, source_id):
     # Remove the old source
@@ -453,10 +467,31 @@ VALUES (
 def create_citation_link(
     conn: Connection, citation_id, owner_id, owner_type: OwnerType
 ):
+    """Create citation link
+    
+    Args:
+        citation_id (int): RM Id to the citation
+        owner_id (int): RM ID of the owner
+        owner_type (OwnerType): Type of the Owner
+    
+    """
     conn.execute(INSERT_CITATION_LINK_STMT, (citation_id, owner_type, owner_id))
 
 
 def create_citation_links(conn: Connection, data=None, **kwargs):
+    r"""Creates multiple citation links
+
+    Args:
+        data (list[tuple[int, int, OwnerType, int]]): tuple of citation_id, owner_type, owner
+
+    Keyword Args:
+        citation_ids (list[int]): List of citation IDs
+        owner_types (list[OwnerType]): List of OwnerTypes
+        owners (list[int]): List of owner RM IDs
+
+    Returns:
+        (first_citation_id, last_citation_id)
+    """
     if data is None:
         for a, b in itertools.combinations(
             [len(a) for a in kwargs.values() if type(a) is list], 2
@@ -477,6 +512,117 @@ def get_citations_for_source(conn: Connection, source_id) -> list[str]:
     sql = "SELECT CitationID FROM CitationTable WHERE SourceID = ?"
     return [c[0] for c in conn.execute(sql, (source_id,))]
 
+def get_all_citations(db_connection, PersonID):
+    if PersonID is None:
+        PersonID_str = input("\n"  "PersonID/RIN =")
+        try:
+            PersonID = int(PersonID_str)
+        except:
+            raise RM_Py_Exception(
+                'ERROR: Enter an integer for the PersonID/RIN.')
+    if PersonID <= 0:
+        raise RM_Py_Exception('ERROR: Enter an integer larger than 0.')
+
+    SqlStmt = """\
+WITH
+  constants(C_Person) AS (
+    SELECT   ?   AS C_Person
+    )
+--      person citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable        AS st
+  INNER JOIN CitationTable      AS ct    ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable  AS clt   ON clt.CitationID = ct.CitationID
+ WHERE clt.OwnerID=(SELECT C_Person FROM constants)
+    AND clt.OwnerType=0
+UNION
+--      name citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable        AS st
+  INNER JOIN CitationTable      AS ct    ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable  AS clt   ON clt.CitationID = ct.CitationID
+  INNER JOIN NameTable          AS nt    ON nt.NameID = clt.OwnerID
+ WHERE nt.OwnerID=(SELECT C_Person FROM constants)
+    AND clt.OwnerType=7
+UNION
+--      fact-person citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable        AS st
+  INNER JOIN CitationTable      AS ct    ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable  AS clt   ON clt.CitationID = ct.CitationID
+  INNER JOIN EventTable         AS et    ON et.EventID = clt.OwnerID
+ WHERE et.OwnerID=(SELECT C_Person FROM constants)
+    AND clt.OwnerType=2
+    AND et.OwnerType=0
+UNION
+--      fact-family citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable        AS st
+  INNER JOIN CitationTable      AS ct    ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable  AS clt   ON clt.CitationID = ct.CitationID
+  INNER JOIN EventTable         AS et    ON et.EventID = clt.OwnerID
+  INNER JOIN FamilyTable        AS ft    ON ft.FamilyID = et.OwnerID
+ WHERE (ft.FatherID=(SELECT C_Person FROM constants) OR ft.MotherID=(SELECT C_Person FROM constants))
+    AND clt.OwnerType=2
+    AND et.OwnerType=1
+UNION
+--      family citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable        AS st
+  INNER JOIN CitationTable      AS ct    ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable  AS clt   ON clt.CitationID = ct.CitationID
+  INNER JOIN FamilyTable        AS ft    ON ft.FamilyID = clt.OwnerID
+ WHERE (ft.FatherID=(SELECT C_Person FROM constants) OR ft.MotherID=(SELECT C_Person FROM constants))
+    AND clt.OwnerType=1
+UNION
+--      association citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable              AS st
+  INNER JOIN CitationTable      AS ct   ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable  AS clt  ON clt.CitationID = ct.CitationID
+  INNER JOIN FANTable           AS ft   ON ft.FanID = clt.OwnerID
+ WHERE (ft.ID1=(SELECT C_Person FROM constants) OR ft.ID2=(SELECT C_Person FROM constants))
+    AND clt.OwnerType=19
+UNION
+--      shared fact citations
+SELECT DISTINCT st.Name COLLATE NOCASE, ct.CitationName COLLATE NOCASE,
+    st.SourceID, ct.CitationID
+  FROM SourceTable             AS st
+  INNER JOIN CitationTable     AS ct  ON ct.SourceID = st.SourceID
+  INNER JOIN CitationLinkTable AS clt ON clt.CitationID = ct.CitationID
+  INNER JOIN EventTable        AS et  ON et.EventID = clt.OwnerID
+  INNER JOIN WitnessTable      AS wt  ON et.EventID = wt.EventID
+ WHERE wt.PersonID=(SELECT C_Person FROM constants)
+    AND clt.OwnerType=2
+    AND et.OwnerType=0
+ORDER BY st.Name COLLATE NOCASE;
+"""
+
+    cur = db_connection.cursor()
+    cur.execute(SqlStmt, (PersonID,))
+    return cur.fetchall()
+
+
+# =========================================================
+# People/Names
+
+def get_primary_name(conn, rm_id: str | int) -> tuple[int, str]:
+    """
+    :returns: tuple[int,str] (name_id, full_name)
+    """
+    sql = "SELECT NameID, format('%s %s', Given, Surname) AS Name FROM NameTable WHERE IsPrimary = 1 AND OwnerID = ?"
+    cur = conn.execute(sql, (rm_id,))
+    row = cur.fetchone()
+    if row:
+        return (row['NameID'], row['Name'])
+    else:
+        return (None, None)
 
 # ===================================================DIV60==
 # XML fields data helper methods
