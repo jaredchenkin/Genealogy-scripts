@@ -22,7 +22,7 @@ class Place:
     def __init__(
         self,
         name: str,
-        rmid: int,
+        rmid: int = 0,
         start_year: int = None,
         end_year:int = None
     ):
@@ -45,6 +45,25 @@ class PlaceGroup:
         self.places = places
         self.search_strings = search_strings
         self.exclude_strings = exclude_strings
+
+    def get_place_ids(self, conn: Connection):
+        placeholders = ", ".join(["(?)"] * len(self.places))
+        sql = f"""\
+            WITH names(name) AS (
+                VALUES {placeholders}
+            )
+            SELECT pt.id
+            FROM names
+            LEFT JOIN PlaceTable pt ON pt.name = names.name
+            WHERE pt.Note != ''
+            """        
+        rows = conn.execute(sql, [p.name for p in self.places])
+        for place, row in zip(self.places, rows):
+            if row[0] is None:
+                pass
+            else:
+                place.id = row[0]
+
 
     def fix_events(self, conn: Connection, search_strings=list(), exclude_strings=list()):
         def build_query(sql_base, place, search_strings, exclude_strings):

@@ -310,19 +310,22 @@ def process_source(
             )
         case "Census":
             if "United States" in source_info["title"]:
-                source_id = create_us_fed_census_source(
-                    conn, source_name, source_root, source_info, collection_url
-                )
+                if not source_id:
+                    source_id = create_us_fed_census_source(
+                        conn, source_name, source_root, source_info, collection_url
+                    )
             elif "UK" in source_info["title"]:
-                source_id = create_uk_census(
-                    conn, source_name, source_info, source_root, collection_url
-                )
+                if not source_id:
+                    source_id = create_uk_census(
+                        conn, source_name, source_info, source_root, collection_url
+                    )
             else:
-                source_id = create_us_state_census(
-                    conn, source_name, source_info, source_root, collection_url
-                )
+                if not source_id:
+                    source_id = create_us_state_census(
+                        conn, source_name, source_info, source_root, collection_url
+                    )
         case _:
-            source_id = make_new_source(conn, source_name, source_root, 1)
+            source_id = make_new_source(conn, source_name, source_root, 1)  #Freeform Source
 
     print(f"Using source {source_name} with source ID {source_id}")
 
@@ -348,7 +351,7 @@ def create_us_state_census(conn, source_name, source_root, source_info, collecti
 
 def create_uk_census(conn, source_name, source_info, source_root, collection_url):
     template_id = 35
-    new_source_fields = source_info  # or do something else
+    new_source_fields = make_uk_census_fields(source_info)
     source_id = make_new_source(
         conn, source_name, source_root, template_id, new_source_fields, collection_url
     )
@@ -442,7 +445,7 @@ def build_vital_citation_fields(name, date, event_type):
 
 def make_us_federal_census_fields(data):
     return {
-        "CensusID": "",  # Year and type
+        "CensusID": "",  # TODO: Year and type
         "Jurisdiction": data["jurisdiction"],
         "Schedule": "population schedule",
         "ItemType": "",
@@ -451,10 +454,13 @@ def make_us_federal_census_fields(data):
         "CreditLine": "",
     }
 
-
+# TODO
 def make_us_state_census_fields(data):
     pass
 
+# TODO
+def make_uk_census_fields(data):
+    pass
 
 def create_citation(
     conn, fs_source: Source, rm_source_id, name: str, fields: list[dict], url

@@ -11,7 +11,6 @@ from typing import Any, Generator
 import configparser
 import enum
 import xml.etree.ElementTree as ET
-import itertools
 import copy
 
 # ===================================================DIV60==
@@ -311,14 +310,12 @@ def add_weblinks(conn: Connection, data=None, **kwargs):
         None
     """
     if data is None:
-        for a, b in itertools.combinations(
-            [len(a) for a in kwargs.values() if type(a) is list], 2
-        ):
-            if a != b:
-                raise RM_Py_Exception("All input lists need to be same size")
-
         data = zip(
-            kwargs["owner_types"], kwargs["owners"], kwargs["names"], kwargs["urls"]
+            kwargs["owner_types"],
+            kwargs["owners"],
+            kwargs["names"],
+            kwargs["urls"],
+            strict=True,
         )
 
     conn.executemany(INSERT_WEBLINK_STMT, data)
@@ -335,7 +332,7 @@ def create_source(
     fields: dict | ET.Element,
     ref_num="",
     url=None,
-    verbose=False
+    verbose=False,
 ):
     sql = """\
 INSERT INTO SourceTable (
@@ -360,6 +357,7 @@ VALUES (
         add_weblink(conn, "", url, source_id, OwnerType.SOURCE)
     return source_id
 
+
 def get_source(conn: Connection, name, verbose=False):
     sql = "SELECT SourceID FROM SourceTable WHERE Name = ?"
     cur = conn.execute(sql, (name,))
@@ -370,6 +368,7 @@ def get_source(conn: Connection, name, verbose=False):
         return res[0]
     else:
         return None
+
 
 def delete_source(conn: Connection, source_id):
     # Remove the old source
@@ -426,17 +425,12 @@ def create_citations(conn: Connection, data=None, **kwargs):
         (first_citation_id, last_citation_id)
     """
     if data is None:
-        for a, b in itertools.combinations(
-            [len(a) for a in kwargs.values() if type(a) is list], 2
-        ):
-            if a != b:
-                raise RM_Py_Exception("All input lists need to be same size")
-
         data = zip(
             kwargs["source_ids"],
             kwargs["ref_nums"],
             map(ET.tostring, kwargs["fields"]),
             kwargs["names"],
+            strict=True,
         )
 
     max = conn.execute("SELECT MAX(CitationID) FROM CitationTable;").fetchone()
@@ -468,12 +462,12 @@ def create_citation_link(
     conn: Connection, citation_id, owner_id, owner_type: OwnerType
 ):
     """Create citation link
-    
+
     Args:
         citation_id (int): RM Id to the citation
         owner_id (int): RM ID of the owner
         owner_type (OwnerType): Type of the Owner
-    
+
     """
     conn.execute(INSERT_CITATION_LINK_STMT, (citation_id, owner_type, owner_id))
 
@@ -493,13 +487,9 @@ def create_citation_links(conn: Connection, data=None, **kwargs):
         (first_citation_id, last_citation_id)
     """
     if data is None:
-        for a, b in itertools.combinations(
-            [len(a) for a in kwargs.values() if type(a) is list], 2
-        ):
-            if a != b:
-                raise RM_Py_Exception("All input lists need to be same size")
-
-        data = zip(kwargs["citation_ids"], kwargs["owner_types"], kwargs["owners"])
+        data = zip(
+            kwargs["citation_ids"], kwargs["owner_types"], kwargs["owners"], strict=True
+        )
 
         conn.executemany(INSERT_CITATION_LINK_STMT, data)
         conn.commit()
@@ -512,16 +502,16 @@ def get_citations_for_source(conn: Connection, source_id) -> list[str]:
     sql = "SELECT CitationID FROM CitationTable WHERE SourceID = ?"
     return [c[0] for c in conn.execute(sql, (source_id,))]
 
+
 def get_all_citations(db_connection, PersonID):
     if PersonID is None:
-        PersonID_str = input("\n"  "PersonID/RIN =")
+        PersonID_str = input("\n" "PersonID/RIN =")
         try:
             PersonID = int(PersonID_str)
         except:
-            raise RM_Py_Exception(
-                'ERROR: Enter an integer for the PersonID/RIN.')
+            raise RM_Py_Exception("ERROR: Enter an integer for the PersonID/RIN.")
     if PersonID <= 0:
-        raise RM_Py_Exception('ERROR: Enter an integer larger than 0.')
+        raise RM_Py_Exception("ERROR: Enter an integer larger than 0.")
 
     SqlStmt = """\
 WITH
@@ -612,6 +602,7 @@ ORDER BY st.Name COLLATE NOCASE;
 # =========================================================
 # People/Names
 
+
 def get_primary_name(conn, rm_id: str | int) -> tuple[int, str]:
     """
     :returns: tuple[int,str] (name_id, full_name)
@@ -620,9 +611,10 @@ def get_primary_name(conn, rm_id: str | int) -> tuple[int, str]:
     cur = conn.execute(sql, (rm_id,))
     row = cur.fetchone()
     if row:
-        return (row['NameID'], row['Name'])
+        return (row["NameID"], row["Name"])
     else:
         return (None, None)
+
 
 # ===================================================DIV60==
 # XML fields data helper methods
