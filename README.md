@@ -3,34 +3,51 @@
 Hi 👋 I'm Jared and I've forked Richard's repo so I can make some customized workflows for my RM database.
 Having all of this work to use as inspiration is immensely helpful. Cheers! 🍻
 
-I have done some small reorganizating to make things a bit more DRY and reusable for me. 
-I've also added a dependency on a python project called `getmyancestors`, which has FamilySearch login and a great data model for managing most important objects.
-Since most of my work currently entails replicating the work I've been doing in FamilySearch over the past 8 or so years into my own personal tree and database,
-I found that I wanted to customize some aspects of how RM imported things from FS and pushed to Ancestry, and how I wanted to handle various sources.
-To safely use the repo, then, I recommend setting up a [virtual environment](https://docs.python.org/3/library/venv.html):
+I have done some small reorganizating to make things a bit more DRY and reusable for me.
+A major organization change revolves around the fact that my first script was [`Lump-FS-Sources.py`](./Lump%20sources/Misc%20specific%20sources/Lump-FS-Sources.py),
+which I modeled after the other Lump sources scripts in that directory.
+Those scripts just run the main() function directly and bypass launcher.
+That led me to move more connection handling and configuration logic into [`common.py`](./RMpy%20package/RMpy/common.py).
+Now, the `create_db_connection` wraps the sqlite file handling directly, and utilizes python's context manager, so you can do:
 
-```bash
-$ pyton3 -m venv .venv
-$ source .venv/bin/activate  # or activate.ps1 for PowerShell
-$ pip install -U -r requirements.txt
+```python
+with create_db_connection(db_path, [RMNOCASE_Path]) as conn:
+    do_stuff(conn, *other_args)
 ```
-After that, you only need to do the second step to access the dependencies. The other option is to just manage the pip package globally (run the third command once), but python tends to discourage that.
 
-All of my scripts are in `FS_Person_Source`, as well as `Lump sources/Misc specific sources/Lump-FS-Sources.py`.
-Right now, the only script that uses `getmyancestors` directly is `FS_PersonSource/get_fs_source.py`, so python shouldn't complain running any other scripts.
-I mostly just use `FS_Person_Source/make_fs_person_sources.py` which  creates a generic citation for every FS person in my RM data so that I can have a direct reference from Ancestry back to that FS person.
+My scripts aren't as polished, and they aren't meant to be. Some are very specific with hardcoded stuff and not meant to be reused for anything else. Other's are maybe good for inspiration. Here is a current list of scripts I've written or files I've worked on:
 
-I also moved some common functionality into RMpy/common.py, and refactored `create_database_connection()` to use python's context manager.
-That way I can use it directly in a `with` statement, and have a little less boilerplate.
-I also skip a lot of the configuration and setup. I don't use RMpy/launcher.py, but just run everthing directly (which is where some of the sqlite connection
-handling was). That all started because my first script was `Lump-FS-Sources.py`, which I modeled after the other Lump sources scripts in that directory. 
-Those run directly and skip launcher so that became my model.
-I also made a helper method `get_config()` in `common.py` that looks for a `config.ini` in the repository root and returns the `ConfigParser` of that.
-Since I code in Linux, I symlink any config I need from a subdirectory to that location, which seemed more straightforward to me.
+```sh
+📁 External_Sources
+├─📄 make_website_citation.py
+📁 FS_Person_Source
+├─📄 get_fs_source.py
+├─📄 make_fs_person_sources.py
+📁 Location_standardizer
+├─📄 place.py
+├─📄 README.md
+├─📄 standardize_locations.py
+📁 Lump sources
+├─📁 Misc specific sources
+| ├─📄 Lump-FS-Sources.py
+| └─📄 ReadMe-FS.md
+📁 RMpy package
+├─📁 RMpy
+| ├─📄 common.py
+| ├─📄 customizations.py
+| └─📄 familysearch.py
+├─📄 config.ini
+└─📄 requirements.txt
+```
 
-My scripts aren't as polished, and they aren't meant to be. Some are very specific with hardcoded stuff and not meant to be reused for anything else.
+## Config
 
-Now, back to Richard...
+One thing about the original setup was having config files in each directory, and having to change the database location
+if you moved between folders. I made a helper method `get_config()` in `common.py` that looks for a `config.ini` in the repository root and returns the `ConfigParser` of that. After that, it looks for any .ini file in the directory of the running
+script and merges that in. For ConfigParser, subsequent file reads overwrite prior configurations, so the local directory .ini
+will have priority over the `$root/config.ini`. In my setup, since I'm on linux I have `prod.ini` and `test.ini` that I symlink to `config.ini`.
+
+Now, back to @RichardOtter...
 
 ---
 

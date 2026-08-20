@@ -36,7 +36,7 @@ def main():
             name = f"{to_link['Name']}, individual in FamilySearch Family Tree"
             urls.append(f"https://familysearch.org/en/tree/person/{to_link['fsID']}")
             names.append(name)
-            citations.append((fs_source_id, name, create_citation_fields(name), to_link["fsID"]))
+            citations.append((fs_source_id, name, ET.tostring(create_citation_fields(name)), to_link["fsID"]))
             updated.append((to_link["Name"], to_link["PersonID"]))
             owners.append(to_link["PersonID"])
 

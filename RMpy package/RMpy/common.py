@@ -12,9 +12,14 @@ import configparser
 import enum
 import xml.etree.ElementTree as ET
 import copy
+import traceback
+import logging
+import __main__
+from glob import glob
+
+logger = logging.getLogger(__name__)
 
 # ===================================================DIV60==
-
 
 @contextmanager
 def create_db_connection(
@@ -49,7 +54,23 @@ def create_db_connection(
     except DatabaseError as e:
         dbConnection.rollback()
         raise RM_Py_Exception(e, "\n\n" "SQLITE error." "\n")
+    except KeyboardInterrupt:
+        # Just quit the app
+        sys.exit(1)
+    except (sqlite3.OperationalError, sqlite3.ProgrammingError) as e:
+        if str(e) == "database is locked":
+            divider = "="*50 + "===DIV60=="
+            div_line = divider + "\n"
+            logger.error(F"{div_line}{div_line}{div_line}"
+                              F"Database is locked.\nRootsMagic is preventing the updates\n"
+                              F"Close RootsMagic and rerun this app.\n"
+                              F"{div_line}{div_line}{div_line}\n\n\n\n")
+        else:
+            logger.error(F"SQL execution returned an error \n\n{e}")
+        sys.exit(1)
     except Exception as e:
+        logger.error("Application failed")
+        traceback.print_exception(e)
         dbConnection.rollback()
         raise e
     finally:
@@ -64,8 +85,14 @@ def get_config() -> configparser.ConfigParser:
     if not os.path.exists(IniFile):
         raise RM_Py_Exception("ERROR: Cannot find ini file: " + IniFile)
 
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(empty_lines_in_values=False,
+                                           interpolation=None)
     config.read(IniFile, "UTF-8")
+
+    overrides = Path(__main__.__file__).parent.glob("*.ini")
+    for f in overrides:
+        config.read(f, "UTF-8")
+
     return config
 
 
@@ -295,7 +322,7 @@ def add_weblink(conn: Connection, name, url, owner_id, owner_type: OwnerType):
 
 
 def add_weblinks(conn: Connection, data=None, **kwargs):
-    """Creates multiple weblinks
+    """Creates multiple weblinks - Use data OR kwargs
 
     Args:
         data (list[tuple[OwnerType, str, str, str]]): list of tuples (OwnerType, owner_id, name, url)
@@ -328,12 +355,27 @@ def add_weblinks(conn: Connection, data=None, **kwargs):
 def create_source(
     conn: Connection,
     name: str,
-    template_id: str | int,
+    template_id: int,
     fields: dict | ET.Element,
     ref_num="",
     url=None,
     verbose=False,
 ):
+    """Create a new source
+    
+    Args:
+        conn (Connection): open sqlite3 connection object
+        name (str): Name for the source
+        template_id (int): RM ID of the SourceTemplate to use for this souce
+        fields (dict | ET.Element): A dict of field name => value for the source (not citation!)
+            or the xml ET.Element object of the `<Fields>` collection
+        ref_num (str): Optional reference number to this source
+        url (str): Optional URL for this source. If present, create and link a new weblink to the new source
+        verbose (bool): Print some extra output statements
+    
+    Returns:
+        int: RM ID for the newly created source
+    """
     sql = """\
 INSERT INTO SourceTable (
   'Name','RefNumber','ActualText','Comments','IsPrivate','TemplateID','Fields','UTCModDate'
@@ -352,7 +394,7 @@ VALUES (
             f"unable to create new source {name} {template_id}\n{ET.tostring(root)}"
         )
     if verbose:
-        print(f"Created new source with ID {source_id}")
+        logger.info(f"Created new source with ID {source_id}")
     if url:
         add_weblink(conn, "", url, source_id, OwnerType.SOURCE)
     return source_id
@@ -364,7 +406,7 @@ def get_source(conn: Connection, name, verbose=False):
     res = cur.fetchone()
     if res:
         if verbose:
-            print(f"Found Source with ID {res[0]}")
+            logger.info(f"Found Source with ID {res[0]}")
         return res[0]
     else:
         return None
@@ -390,15 +432,24 @@ VALUES (
 
 def create_citation(
     conn: Connection,
-    source_id: str,
+    source_id: int,
     ref_num: str,
     name: str,
     fields: dict | ET.Element,
     url=None,
 ):
     """Creates a new citation
-    Returns:
-        new citation ID
+    
+    Args:
+        conn (`Connection`): an open sqlite3 connection object
+        source_id (int): RM Database ID of the Source for this Citation
+        ref_num (int): Optional reference number to assign to the citation
+        name (str): Name for the citation
+        fields (dict | `ET.Element`): A dict of field name => value for the source (not citation!)
+            or the xml ET.Element object of the `<Fields>` collection
+        url (str): Optional URL string, if present will also create and link a weblink to the citation
+    Returns:     
+        (int): RM database ID for the newly created citation
     """
     data = (source_id, ref_num, ET.tostring(wrap_fields(fields)), name)
     citation_id = conn.execute(INSERT_CITATION_STMT, data).lastrowid
@@ -415,14 +466,14 @@ def create_citations(conn: Connection, data=None, **kwargs):
     Args:
         data (list[tuple[int, int, ET.Element, str]]): tuple of source_id, ref_num, fields, name
 
-    Keyword Args:
+    Args:
         source_ids (list[int]): List of source IDs
         ref_nums (list[int]): List of reference numbers
         fields (list[ET.Element]): List of fields XML elements
         names (list[str]): List of names
 
     Returns:
-        (first_citation_id, last_citation_id)
+        (first_citation_id, last_citation_id) tuple[int,int]: tuple of IDs of the first and last citation created
     """
     if data is None:
         data = zip(
@@ -443,7 +494,7 @@ def create_citations(conn: Connection, data=None, **kwargs):
     conn.commit()
 
     if cur:
-        return (next_citation_id, next_citation_id + cur.rowcount)
+        return (next_citation_id, next_citation_id + cur.rowcount - 1)
     else:
         None
 
@@ -464,6 +515,7 @@ def create_citation_link(
     """Create citation link
 
     Args:
+        conn (`Connection`): an open sqlite3 connection object
         citation_id (int): RM Id to the citation
         owner_id (int): RM ID of the owner
         owner_type (OwnerType): Type of the Owner
@@ -504,6 +556,16 @@ def get_citations_for_source(conn: Connection, source_id) -> list[str]:
 
 
 def get_all_citations(db_connection, PersonID):
+    """Get all citations for a RM person
+        Lifted from `ListCitationsForPersonID.py`
+    
+    Args:
+        db_connection (Connection): an open sqlite3 connection object
+        PersonID (int): RM database ID of the person to query
+    
+    Returns:
+        (list[Row]): List of rows with fields source name, citation name, source id and citation id
+    """
     if PersonID is None:
         PersonID_str = input("\n" "PersonID/RIN =")
         try:
@@ -603,9 +665,15 @@ ORDER BY st.Name COLLATE NOCASE;
 # People/Names
 
 
-def get_primary_name(conn, rm_id: str | int) -> tuple[int, str]:
-    """
-    :returns: tuple[int,str] (name_id, full_name)
+def get_primary_name(conn, rm_id: int) -> tuple[int, str]:
+    """Gets the primary name for a person by ID
+
+    Args:
+        conn (Connection): an open sqlite3 connection object
+        rm_id (int): RM database ID of the person to search for
+    
+    Returns: 
+        (tuple[int,str]): name_id, full_name
     """
     sql = "SELECT NameID, format('%s %s', Given, Surname) AS Name FROM NameTable WHERE IsPrimary = 1 AND OwnerID = ?"
     cur = conn.execute(sql, (rm_id,))
@@ -621,6 +689,16 @@ def get_primary_name(conn, rm_id: str | int) -> tuple[int, str]:
 
 
 def create_xml_fields(fields: dict, G_DEBUG=False):
+    """Turns a dict of name => value into an XML tree of fields
+    
+    Args:
+        fields (dict[str,str]): Dictionary of name => value key pairs
+    
+    Returns:
+        (ET.Element): An XML element tree of all the fields from the input like:
+            `<Field><Name>name</Name><Value>value</Value></Field>`
+            then all wrapped in `<Field></Field>` tags
+    """
     root = ET.Element("Fields")
 
     root.extend([create_xml_field(name, value) for name, value in fields.items()])
@@ -636,6 +714,15 @@ def create_xml_fields(fields: dict, G_DEBUG=False):
 
 
 def create_xml_field(name, value):
+    """Creates a single XML field from a name,value pair
+
+    Args:
+        name: Name of the field
+        value: Value of the field
+    
+    Returns:
+        (Element): XML element like `<Field><Name>name</Name><Value>value</Value></Field>`
+    """
     el = ET.Element("Field")
     ET.SubElement(el, "Name").text = name
     ET.SubElement(el, "Value").text = value
@@ -652,6 +739,17 @@ def wrap_fields(fields: str | ET.Element):
 
 # ===================================================DIV60==
 def create_repo(conn: Connection, name, url):
+    """Basic create repository function
+    
+    Args:
+        conn (Connection): an open sqlite3 connection object
+        name (str): Name of the Repository
+        url (str): URL to the repository
+    
+    Returns:
+        (int|None): RM Database ID of the newly created repository
+    
+    """
     sql_create = """
 INSERT INTO AddressTable (
   AddressType, Name, Street1, Street2, City,State,Zip,Country,
@@ -672,6 +770,13 @@ VALUES (
 
 
 def link_source_to_repo(conn: Connection, source_id, repo_id):
+    """Create a link from a source to a repository
+
+    Args:
+        conn (Connection): an open sqlite3 connection object
+        source_id (int): RM Database ID of the source to link
+        repo_id (int): RM Database ID of the repository to link to
+    """
     sql_add_repo = """
 INSERT INTO AddressLinkTable (
   OwnerType, AddressID, OwnerID, AddressNum, Details, UTCModDate

@@ -64,15 +64,16 @@ def process_rafalin(args, config):
         raise RM.RM_Py_Exception(
             f"There are only 282 pages in the book, {args.page} isn't valid. Try again"
         )
-    if args.register > 590 or args.register < 1:
+    if args.register.isdigit() and (int(args.register) > 590 or int(args.register) < 1):
         raise RM.RM_Py_Exception(
-            f"The highest register number is 590, {args.register} isn't valid. Try again"
+            f"The highest register number is 590, {int(args.register)} isn't valid. Try again"
         )
 
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
     with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
         fields = {
+            "ItemOfInterest":args.name,
             "AccessType": "",
             "AccessDate": "",
             "Page": f"Page {args.page}",
@@ -82,8 +83,8 @@ def process_rafalin(args, config):
         source_id = get_or_create_rafalin_source(conn)
         if check_link_exists(conn, source_id, args.rm_id, args.name):
             citation_id = RM.create_citation(conn, source_id, "", args.name, fields, url)
-            name = RM.get_primary_name(conn, args.rm_id)
-            RM.create_citation_link(conn, citation_id, name[0], RM.OwnerType.NAME)
+            # name = RM.get_primary_name(conn, args.rm_id)
+            RM.create_citation_link(conn, citation_id, args.rm_id, RM.OwnerType.PERSON)
 
 def check_link_exists(conn, source_id, rm_id, name):
     for row in RM.get_all_citations(conn, rm_id):

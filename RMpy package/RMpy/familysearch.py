@@ -33,6 +33,12 @@ def get_existing_sources(conn: Connection) -> dict[str, dict[str, str]]:
       for those sources
     Don't limit to just the FamilySearch source type in case of other source
       template types used, such as US Census, etc.
+    
+    Args:
+        conn Connection: open sqlite3 connection object
+    
+    Returns:
+        dict[str, dict[str,str]]: Map with keys like {'name':{'id', 'template'}}
     """
     # TODO: Multiple sources with same name?
     sql_stmt = """\
