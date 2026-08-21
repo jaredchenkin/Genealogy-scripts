@@ -152,7 +152,7 @@ SELECT et.EventID, pt.Name, et.PlaceID
         for i, n in enumerate(named_events.keys()):
             print(f"{i+1}. {n}")
         resp = input(
-            "Any locations to skip (comma separated list) [Enter to fix all/0 to fix none]? "
+            "Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ? "
         )
         if resp == "0":
             return
