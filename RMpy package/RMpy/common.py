@@ -4,8 +4,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import sqlite3
-from sqlite3 import Connection, DatabaseError
 import ctypes
+
+from sqlite3 import Connection, DatabaseError
 from contextlib import contextmanager
 from typing import Any, Generator
 import configparser
@@ -20,9 +21,23 @@ from glob import glob
 logger = logging.getLogger(__name__)
 
 # ===================================================DIV60==
+def create_db_connection(db_file_path, db_extension_file_path_list):
+
+    dbConnection = None
+    try:
+        dbConnection = sqlite3.connect(db_file_path)
+        if db_extension_file_path_list is not None:
+            dbConnection.enable_load_extension(True)
+            # load SQLite extensions
+            for extension in db_extension_file_path_list:
+                dbConnection.load_extension(str(extension))
+    except Exception as e:
+        raise RM_Py_Exception(
+            e, "\n\n" "Cannot open the RM database file." "\n")
+    return dbConnection
 
 @contextmanager
-def create_db_connection(
+def create_db_connection2(
     db_file_path, db_extension_file_path_list
 ) -> Generator[Connection, Any, None]:
     """Manages the RootsMagic database file object and tries to gracefully handle errors
@@ -113,7 +128,7 @@ def time_stamp_now(type=None):
     now = datetime.now()
     if type is None:
         dt_string = now.strftime("%Y-%m-%d %H:%M:%S")
-    elif type == "file":
+    elif type == 'file':
         dt_string = now.strftime("%Y-%m-%d_%H%M%S")
     return dt_string
 
@@ -157,7 +172,7 @@ def launched_from_explorer():
 # ===================================================DIV60==
 def pause_with_message(message=None):
     # Don't pause when running from a terminal or when input output is redirected
-    if message != None:
+    if (message != None):
         print(str(message))
     if launched_from_explorer():
         input("\n" "Press the <Enter> key to continue...")
@@ -169,7 +184,7 @@ def get_current_directory(script_path: Path) -> Path:
 
     # Determine if application is a script file or frozen exe and get its directory
     # see   https://pyinstaller.org/en/stable/runtime-information.html
-    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         application_path = (Path(sys.executable)).parent
     else:
         application_path = script_path
@@ -464,11 +479,11 @@ def create_citations(conn: Connection, data=None, **kwargs):
     r"""Creates multiple citations
 
     Args:
-        data (list[tuple[int, int, ET.Element, str]]): tuple of source_id, ref_num, fields, name
+        data (list[tuple[int, str, ET.Element, str]]): tuple of source_id, ref_num, fields, name
 
     Args:
         source_ids (list[int]): List of source IDs
-        ref_nums (list[int]): List of reference numbers
+        ref_nums (list[str]): List of reference numbers
         fields (list[ET.Element]): List of fields XML elements
         names (list[str]): List of names
 

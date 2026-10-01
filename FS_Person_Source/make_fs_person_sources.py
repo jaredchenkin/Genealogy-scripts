@@ -23,7 +23,7 @@ def main():
     updated = []
 
     # Process the database
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         cur = conn.cursor()
 
         fs_source_id = get_or_create_fs_person_source(conn)
@@ -36,8 +36,8 @@ def main():
             name = f"{to_link['Name']}, individual in FamilySearch Family Tree"
             urls.append(f"https://familysearch.org/en/tree/person/{to_link['fsID']}")
             names.append(name)
-            citations.append((fs_source_id, name, ET.tostring(create_citation_fields(name)), to_link["fsID"]))
-            updated.append((to_link["Name"], to_link["PersonID"]))
+            citations.append((fs_source_id, to_link["fsID"], create_citation_fields(name), name))
+            updated.append(f"{to_link["Name"]}-{to_link["PersonID"]} -> {to_link['fsID']}")
             owners.append(to_link["PersonID"])
 
         size = len(updated)
@@ -61,7 +61,7 @@ def main():
     if len(updated) > 0:
         print(f"Successfully updated {len(updated)} records:")
         for p in updated:
-            print(*p)
+            print(p)
     else:
         print("No new records to update")
 
@@ -126,7 +126,7 @@ def make_source_fields(name):
 
 def create_citation_fields(detail):
     field_data = {"Page": detail}
-    return RM.create_xml_fields(field_data)
+    return ET.tostring(RM.wrap_fields(field_data))
 
 
 # ================================================================

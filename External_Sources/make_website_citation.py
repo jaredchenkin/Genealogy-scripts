@@ -71,7 +71,7 @@ def process_rafalin(args, config):
 
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         fields = {
             "ItemOfInterest":args.name,
             "AccessType": "",
@@ -164,7 +164,7 @@ def process_monastirli(args, config):
 
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         source_id = get_or_create_cassorla_source(conn)
         citation_id = RM.create_citation(
             conn, source_id, "", args.name, fields, args.page
@@ -195,7 +195,7 @@ def process_yad_vashem(args, config):
 
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         url = f"{base_uri}/{args.ref_num}"
         source_id = get_or_create_yad_vashem_source(conn, base_uri)
         citation_id = RM.create_citation(
@@ -240,7 +240,7 @@ def process_ushmm(args, config):
 
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         source_id = get_or_create_ushmm_source(conn, base_uri)
         citation_id = RM.create_citation(
             conn, source_id, args.ref_num, citation_name, fields, args.url

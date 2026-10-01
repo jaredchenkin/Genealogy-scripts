@@ -130,7 +130,7 @@ def main():
     config = RM.get_config()
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         fix_all(conn)
         #dvinsk.fix_events(conn)
 

@@ -35,7 +35,7 @@ def main():
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
 
     # Process the database
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
 
         fs_template_id = "439"  # get_or_create_fs_template(conn)
         fs_repo_id = FS.get_or_create_fs_repo(conn)
