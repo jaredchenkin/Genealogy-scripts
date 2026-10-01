@@ -193,7 +193,8 @@ def get_current_directory(script_path: Path) -> Path:
 
 # ===================================================DIV60==
 class RM_Py_Exception(Exception):
-    """Exceptions thrown for configuration/database/application logic issues"""
+
+    '''Exceptions thrown for configuration/database/application logic issues'''
 
 
 # ===================================================DIV60==
