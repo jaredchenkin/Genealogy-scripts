@@ -100,7 +100,7 @@ SELECT et.EventID, pt.Name, et.PlaceID
             if place.start_year:
                 years.append(place.start_year)
             if place.end_year:
-                years.append(place.end_year)
+                years.append(place.end_year - 1)
             return years
 
         # Override search_strings in function call
