@@ -29,13 +29,13 @@ My scripts aren't as polished, and they aren't meant to be. Some are very specif
 ├─📄 standardize_locations.py
 📁 Lump sources
 ├─📁 Misc specific sources
-| ├─📄 Lump-FS-Sources.py
-| └─📄 ReadMe-FS.md
+│ ├─📄 Lump-FS-Sources.py
+│ └─📄 ReadMe-FS.md
 📁 RMpy package
 ├─📁 RMpy
-| ├─📄 common.py
-| ├─📄 customizations.py
-| └─📄 familysearch.py
+│ ├─📄 common.py
+│ ├─📄 customizations.py
+│ └─📄 familysearch.py
 ├─📄 config.ini
 └─📄 requirements.txt
 ```

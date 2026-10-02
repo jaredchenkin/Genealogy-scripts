@@ -11,10 +11,11 @@ from getmyancestors.classes.tree import Tree, Source, Indi
 from getmyancestors.classes.session import Session
 
 sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1] / "RMpy package")))
+sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1])))
 import RMpy.common as RM  # noqa #type: ignore
 import RMpy.RMDate as RMdate  # noqa #type: ignore
 import RMpy.familysearch as FS
-import RMpy.customizations as Cust
+import Customizations.customizations as Cust
 
 
 def sigint_handler(sig, frame):
@@ -31,7 +32,7 @@ def main():
 
     try:
         parser.error = parser.exit
-        args = parser.parse_args() #(["L8M6-6BH"])
+        args = parser.parse_args(["GMGG-2W5"])
     except SystemExit:
         parser.print_help(file=sys.stderr)
         sys.exit(2)
@@ -56,7 +57,7 @@ def main():
     person: Indi = tree.indi[fsid]
     fs_sources = get_fs_sources(fs, person)
 
-    with RM.create_db_connection(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
 
         rmID = get_rmid_from_fsid(conn, fsid)
         print(
@@ -196,9 +197,13 @@ def get_name_targets(conn, rid) -> list[str]:
             + "Enter the name number or [Nn] to skip: "
         )
         try:
-            if response and response.lower() != "n":
-                for n in get_targets(response, len(names)):
-                    targets.append(names[n]["id"])
+            if response:
+                if response.lower() != "n":
+                    for n in get_targets(response, len(names)):
+                        targets.append(names[n]["id"])
+                elif response == '':
+                    targets.append(names[0]["id"])
+
             break
         except:
             print("Bad input try again")
@@ -227,7 +232,8 @@ def get_fs_source_target(sources: list[Source]) -> Source:
     for s in sources:
         print(f"{s.num}: {s.title} | {s.citation.split(',')[-1].strip()[:-1]}")
 
-    fs_source = int(input("Select an FS source to bring over: "))
+    fs_source = input("Select an FS source to bring over: ")
+    fs_source = int(fs_source)
     if fs_source == 0:
         sys.exit(0)
     elif fs_source < 0 and fs_source > len(sources):
@@ -279,7 +285,7 @@ def process_source(
     collection_url = None
 
     if source_id:
-        source_info["type"] = get_source_type_from_name(fs_source)
+        source_info["type"] = get_source_type_from_name(fs_source.title)
     else:
         source_data = fs_source.tree.fs.get_url(
             f"/platform/sources/descriptions/{fs_source.fid}"
@@ -324,8 +330,16 @@ def process_source(
                     source_id = create_us_state_census(
                         conn, source_name, source_info, source_root, collection_url
                     )
+        case "Migration":
+            if not source_id:
+                source_id = create_naturalization_source(
+                    conn, source_name, source_root, source_info, collection_url
+                )
+            new_citation_fields = build_naturalization_citation(
+                principal_name, citation_fields, source_info, fs_source
+            )
         case _:
-            source_id = make_new_source(conn, source_name, source_root, 1)  #Freeform Source
+            source_id = make_new_source(conn, source_name, source_root, 1)  # TODO: Fix : 1 is not Freeform Source
 
     print(f"Using source {source_name} with source ID {source_id}")
 
@@ -349,7 +363,7 @@ def create_us_state_census(conn, source_name, source_root, source_info, collecti
     return source_id
 
 
-def create_uk_census(conn, source_name, source_info, source_root, collection_url):
+def create_uk_census(conn, source_name, source_root, source_info, collection_url):
     template_id = 35
     new_source_fields = make_uk_census_fields(source_info)
     source_id = make_new_source(
@@ -371,11 +385,45 @@ def create_us_fed_census_source(
 
 def create_vitals_source(conn, source_name, source_root, source_info, collection_url):
     template_id = RM.find_source_template(conn, Cust.VITAL_RECORDS)
+    if template_id is None:
+        raise RM.RM_Py_Exception(f"Unable to find source template with name ${Cust.VITAL_RECORDS}")
     new_source_fields = make_vital_source_fields(source_info)
     source_id = make_new_source(
         conn, source_name, new_source_fields, source_root, collection_url, template_id
     )
     return source_id
+
+def create_naturalization_source(conn, source_name, source_root, source_info, collection_url):
+    template_id = 134
+    new_source_fields = dict(
+        USCourt=source_info["jurisdiction"],
+        Series=source_info["title"],
+
+    )
+    source_id = make_new_source(
+        conn, source_name, source_root, template_id, new_source_fields, collection_url
+    )
+    return source_id
+
+def  build_naturalization_citation(principal_name, citation_fields, source_info, fs_source):
+    source_data = fs_source.tree.fs.getUrl(urlsplit(fs_source.url).path, no_api=True)
+    # Gets "DeclarationOfIntent", "NaturalizationPetition", etc
+    migration_type = camel_case_split(parse_type_urn(source_data["sourceDescriptions"][2]["coverage"][0]["recordType"]))
+    return dict(
+        Name=principal_name,
+        ItemOfInterest=migration_type
+    )
+
+
+def camel_case_split(s):
+    result = []
+    start = 0
+    for i, c in enumerate(s[1:], 1):
+        if c.isupper():
+            result.append(s[start:i])
+            start = i
+    result.append(s[start:])
+    return result
 
 
 def get_collection_url(source_data):
@@ -394,11 +442,13 @@ def get_source_info(data):
     return source_info
 
 
-def get_source_type_from_name(fs_source):
+def get_source_type_from_name(title: str):
     source_type = None
-    vitals = re.search(r"(birth|death|marriage)", fs_source.title, re.IGNORECASE)
+    vitals = re.search(r"(birth|death|marriage)", title, re.IGNORECASE)
     if vitals:
         source_type = str(vitals[0]).title()
+    elif "naturalization".casefold() in title.casefold():
+        source_type = "Migration"
     return source_type
 
 
@@ -411,9 +461,16 @@ def get_en_US_item(items) -> str:
 
 def get_type(coll):
     for r in coll["coverage"]:
-        type: SplitResult = urlsplit(r["recordType"])
-        if "gedcomx.org" in type.netloc:
-            return type.path.split("/")[1]
+        type = parse_type_urn(r['recordType'])
+        if type != None:
+            return type
+
+def parse_type_urn(recordType):
+    type: SplitResult = urlsplit(recordType)
+    if "gedcomx.org" in type.netloc:
+        return type.path.split("/")[1]
+    elif "familysearch.org" in type.netloc:
+        return type.path.split("/")[3]
 
 
 def make_new_source(conn, name, root, template_id, fields={}, collection_url=None):

@@ -2,6 +2,24 @@
 
     "version": "0.2.0",
     "configurations": [
+        
+        {
+            "name":"Python Debugger: Current File with Arguments",
+            "type":"debugpy",
+            "request":"launch",
+            "program":"${file}",
+            "console":"integratedTerminal",
+            "args":"${command:pickArgs}",
+            "justMyCode": false
+        },
+        {
+            "name": "External source",
+            "type":"debugpy",
+            "request":"launch",
+            "cwd":  "${workspaceFolder}/External_Sources",
+            "program":"make_website_citation.py",
+            "args":["147", "u", "92431", "https://collections.ushmm.org/search/catalog/pa1132151", "146", "145"]
+        },
         {
             "name": "PYD: Current File, No args",
             "type": "debugpy",

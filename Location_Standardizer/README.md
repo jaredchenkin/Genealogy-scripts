@@ -31,14 +31,14 @@ brooklyn = PlaceGroup(
 `Place` takes 4 parameters:
 
 1. A standardized place name (required)
-1. ID of the place from the `PlaceTable` in RootsMagic. If missing, try to find or create the place (see below)
+1. ID of the place from the `PlaceTable` in RootsMagic (required). (TODO: If missing, try to find or create the place (see below))
 1. A start date for the place (optional)
 1. An end date for the place (optional)
 
 At least one date is requires.
 If either date is missing or None, it means all dates on the opposite side of the given value.
 
-### (TODO) Find or create a place
+### (TODO) Find or create a place (Planned, not implemented)
 
 If you don't provide an RM ID, Place will attempt to find it in the DB:
 
@@ -56,11 +56,11 @@ If it finds a place without a note, it will add it.
 ## PlaceGroup
 
 Collect all of the places in a PlaceGroup.
-The place group constructor also takes a search_string list and an exclude_string list.
+The place group constructor also takes a `search_string` list and an `exclude_string` list.
 
-search_strings is required and tells the group how to find existing places to sort through.
+`search_strings` is required and tells the group how to find existing places to sort through.
 
-exclude_strings is an optional list of strings to further filter out places from the found list.
+`exclude_strings` is an optional list of strings to further filter out places from the found list.
 
 This doesn't have to be all inclusive, as we'll see below.
 
@@ -75,11 +75,11 @@ It's your database. No I'm not sanitizing any inputs.
 Pretty easy. Just pass a `sqlite3.Connection` object to `PlaceGroup`'s `fix_places()` method and let it run:
 
 ```python
-with RM.create_db_connection(db_file) as conn:
+with RM.create_db_connection2(db_file) as conn:
     brooklyn.fix_events(conn)
 ```
 
-(That's my version of `common.py`. Richard's setup will be different.)
+(That's my version of [`common.py`](../RMpy%20package/RMpy/common.py). Richard's setup will be different.)
 
 ```bash
 $ python3 bkln_fix.py
@@ -98,15 +98,46 @@ Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ?
 For each Place in the PlaceGroup, it looks for places that match the search_strings but not the exclude_strings.
 Then it presents a list of every place found. This is where the exclude_strings list comes in - it doesn't have
 to be exhaustive because you will always get the chance to skip locations at this point. Just maybe pick a few
-easy terms that you know won't make sense in the placename, like other places. For Brooklyn, since I have a lot of relatives buried there as well,
-skipping anything with "cemetery" in the name seemed like a good idea.
+easy terms that you know won't make sense in the placename, like other places. 
+For Brooklyn, since I have a lot of relatives buried there as well, skipping anything with "cemetery" in the name seemed like a good idea. 
 
 (Maybe Brooklyn wasn't the best example, since I have every ward, district, and other census places...)
 
-Follow the prompts - review the list of places that will be consolidated, enter a comma separated list with the numbers of any places you want to skip, or just hit Enter to update them all,
-or 0 skips the place entirely and moves on to the next one.
+Follow the prompts - review the list of places that will be consolidated, enter a comma separated list with the numbers of any places you want to skip.
+Enter updates them all, or 0 skips the place entirely and moves on to the next one.
 
-`fix_events()` also takes lists of search_strings and exclude_strings if you want to override the ones 
+## Another example
+
+```python
+with RM.create_db_connection2(db_file) as conn:
+    [suwalki, augustow].fix_events(conn, exclude_strings=["punsk", "puńsk"]
+```
+
+```bash
+$ python3 standardize_locations.py
+Updating 8 events between 1816 and 1866 with the following places to 'Suwałki, Augustów, Kingdom of Poland, Russian Empire':
+1. Augustów, Suwałki, Kingdom of Poland, Russian Empire
+2. Bilwinowo, Szypliszki, Suwałki, Podlaskie, Poland
+3. Suwałki, Poland
+Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ? 2
+Updating 1 events between 1867 and 1917 with the following places to 'Suwałki, Suwałki, Suwałki, Kingdom of Poland, Russian Empire':
+1. Kalvarija, Suwałki, Kingdom of Poland, Russian Empire
+Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ? 1
+No events found between 1918 and 1999 for Suwałki, Białystok, Poland
+No events found after 1999 for Suwałki, Podlaskie, Poland
+No events found between 1569 and 1795 for Augustów, Podlaskie, Kingdom of Poland
+No events found between 1795 and 1806 for Augustów, Białystok, New East Prussia, Kingdom of Prussia
+No events found between 1807 and 1815 for Augustów, Dąbrowa, Łomża, Duchy of Warsaw
+Updating 26 events between 1816 and 1917 with the following places to 'Augustów, Suwałki, Kingdom of Poland, Russian Empire':
+1. Suwałki, Augustów, Kingdom of Poland, Russian Empire
+2. Kalvarija, Augustów, Kingdom of Poland, Russian Empire
+3. Filipów, Augustów, Kingdom of Poland, Russian Empire
+Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ? 1,2,3
+```
+
+For these locations in Poland, the town names often ended up as district names as well, so needing to pick out smaller towns that show up on the fly is key.
+
+The `fix_events()` function itself also takes lists of `search_strings` and `exclude_strings` if you want to override the ones 
 configured in the PlaceGroup.
 
 [`standardize_locations.py`](./standardize_locations.py) is my working file, examples there.

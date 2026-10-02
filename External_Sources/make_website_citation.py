@@ -129,6 +129,8 @@ def process_monastirli(args, config):
         "Haim_JacobCalderon.html": "Haim and Jacob Calderon Family of Monastir",
         "Aroesty.html": "The Menachem Aroesty Family Tree",
         "Mord_Testa.html": "The Mordohai Testa Family Tree",
+        "Baker.html": "Baker / Beahhaar / Ben Yakaar Family",
+        "Yaacov_Pesso.html": "The Yaacov Pesso Family",
     }
 
     url = parse.urlsplit(args.page)
