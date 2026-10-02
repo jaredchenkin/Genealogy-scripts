@@ -18,8 +18,8 @@ from places import Place, PlaceGroup
 
 brooklyn = PlaceGroup(
     places=[
-        Place("Brooklyn, Kings, New York, United States", 5955, 1776, 1898),
-        Place("Brooklyn, New York City, New York, United States", 5879, start_year=1898),
+        Place("Brooklyn, Kings, New York, United States", 5955, "1776", "1898"),
+        Place("Brooklyn, New York City, New York, United States", 5879, start_year="1898"),
     ],
     search_strings=["brooklyn%new york"],
     exclude_strings=["cemetery"]
@@ -32,11 +32,11 @@ brooklyn = PlaceGroup(
 
 1. A standardized place name (required)
 1. ID of the place from the `PlaceTable` in RootsMagic (required). (TODO: If missing, try to find or create the place (see below))
-1. A start date for the place (optional)
-1. An end date for the place (optional)
+1. A start date for the place (optional) in YYYY-mm-dd format. Month and day are optional, but month is required if a day is specified
+1. An end date for the place (optional) (same as start date)
 
-At least one date is requires.
-If either date is missing or None, it means all dates on the opposite side of the given value.
+At least one date is required.
+If either date is missing or None, it means all dates on the opposite side of the given value (only providing an end date means all dates before then are valid).
 
 ### (TODO) Find or create a place (Planned, not implemented)
 
@@ -98,8 +98,8 @@ Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ?
 For each Place in the PlaceGroup, it looks for places that match the search_strings but not the exclude_strings.
 Then it presents a list of every place found. This is where the exclude_strings list comes in - it doesn't have
 to be exhaustive because you will always get the chance to skip locations at this point. Just maybe pick a few
-easy terms that you know won't make sense in the placename, like other places. 
-For Brooklyn, since I have a lot of relatives buried there as well, skipping anything with "cemetery" in the name seemed like a good idea. 
+easy terms that you know won't make sense in the placename, like other places.
+For Brooklyn, since I have a lot of relatives buried there as well, skipping anything with "cemetery" in the name seemed like a good idea.
 
 (Maybe Brooklyn wasn't the best example, since I have every ward, district, and other census places...)
 
@@ -137,7 +137,7 @@ Any locations to skip (comma separated list) [Enter to fix all/0 to fix none] ? 
 
 For these locations in Poland, the town names often ended up as district names as well, so needing to pick out smaller towns that show up on the fly is key.
 
-The `fix_events()` function itself also takes lists of `search_strings` and `exclude_strings` if you want to override the ones 
+The `fix_events()` function itself also takes lists of `search_strings` and `exclude_strings` if you want to override the ones
 configured in the PlaceGroup.
 
 [`standardize_locations.py`](./standardize_locations.py) is my working file, examples there.

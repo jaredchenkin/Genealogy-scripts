@@ -21,11 +21,11 @@ DEBUG = False
 ## TODO: Perhaps dynamically find/create the place instead of hardcoding PlaceID
 dvinsk = PlaceGroup(
     places=[
-        Place("Dinaburg, Grand Duchy of Lithuania", 6361, 1667, 1802),
-        Place("Dinaburg, Daugavpils, Vitebsk, Russian Empire", 6611, 1802, 1893),
-        Place("Dvinsk, Dvinsk, Vitebsk, Russian Empire", 6608, 1893, 1917),
-        Place("Daugavpils, Latvia, Soviet Union", 6612, 1917, 1991),
-        Place("Daugavpils, Latvia", 950, 1991),
+        Place("Dinaburg, Grand Duchy of Lithuania", 6361, "1667", "1801"),
+        Place("Dinaburg, Daugavpils, Vitebsk, Russian Empire", 6611, "1802", "1892"),
+        Place("Dvinsk, Dvinsk, Vitebsk, Russian Empire", 6608, "1893", "1917"),
+        Place("Daugavpils, Latvia, Soviet Union", 6612, "1918", "1990"),
+        Place("Daugavpils, Latvia", 950, "1991", None),
     ],
     search_strings=["Dinaburg", "Dvinsk", "Dunaburg", "Daugavpils"],
     exclude_strings=[
@@ -37,27 +37,27 @@ dvinsk = PlaceGroup(
 
 punsk = PlaceGroup(
     places=[
-        Place("Puńsk, Troki, Grand Duchy of Lithuania", 7186, end_year=1795),
-        Place("Puńsk, Białystok, New East Prussia, Kingdom of Prussia", 7187, 1795, 1806),
-        Place("Puńsk, Sejny, Łomża, Duchy of Warsaw", 7188, 1807, 1815),
-        Place("Puńsk, Augustów, Kingdom of Poland, Russian Empire", 305, 1816, 1866),
-        Place("Puńsk, Suwałki, Suwałki, Kingdom of Poland, Russian Empire", 2178, 1867, 1917),
-        Place("Puńsk, Sejny, Białystok, Poland", 2758, 1918, 1975),
-        Place("Puńsk, Suwałki, Poland", 284, 1975, 1999),
-        Place("Puńsk, Sejny, Podlaskie, Poland", 1006, 1999),
+        Place("Puńsk, Troki, Grand Duchy of Lithuania", 7186, None, "1794"),
+        Place("Puńsk, Białystok, New East Prussia, Kingdom of Prussia", 7187, "1795", "1806"),
+        Place("Puńsk, Sejny, Łomża, Duchy of Warsaw", 7188, "1807", "1815"),
+        Place("Puńsk, Augustów, Kingdom of Poland, Russian Empire", 305, "1816", "1866"),
+        Place("Puńsk, Suwałki, Suwałki, Kingdom of Poland, Russian Empire", 2178, "1867", "1917"),
+        Place("Puńsk, Sejny, Białystok, Poland", 2758, "1918", "1975"),
+        Place("Puńsk, Suwałki, Poland", 284, "1976", "1998"),
+        Place("Puńsk, Sejny, Podlaskie, Poland", 1006, "1999", None),
     ],
     search_strings=["punsk", "puńsk"],
 )
 
 augustow = PlaceGroup(
     places=[
-        Place("Augustów, Podlaskie, Kingdom of Poland", 5603, 1569, 1795),
-        Place("Augustów, Białystok, New East Prussia, Kingdom of Prussia", 302, 1795, 1806),
-        Place("Augustów, Dąbrowa, Łomża, Duchy of Warsaw", 301, 1807, 1815),
-        Place("Augustów, Suwałki, Kingdom of Poland, Russian Empire", 2197, 1816, 1917),
-        Place("Augustów, Augustów, Białystok, Poland", 235, 1918, 1975),
-        Place("Augustów, Suwałki, Poland", 7204, 1975, 1999),  # TODO
-        Place("Augustów, Augustów, Podlaskie, Poland", 7205, 1999),  # TODO
+        Place("Augustów, Podlaskie, Kingdom of Poland", 5603, "1569", "1794"),
+        Place("Augustów, Białystok, New East Prussia, Kingdom of Prussia", 302, "1795", "1806"),
+        Place("Augustów, Dąbrowa, Łomża, Duchy of Warsaw", 301, "1807", "1815"),
+        Place("Augustów, Suwałki, Kingdom of Poland, Russian Empire", 2197, "1816", "1917"),
+        Place("Augustów, Augustów, Białystok, Poland", 235, "1918", "1975"),
+        Place("Augustów, Suwałki, Poland", 7204, "1975", "1998"),  # TODO
+        Place("Augustów, Augustów, Podlaskie, Poland", 7205, "1999", None),  # TODO
     ],
     search_strings=["augustow", "Augustów"],
     exclude_strings=["punsk", "Puńsk", "sejny", "krasnopol", "filipów", "filipow", "Kalvarija"],
@@ -65,10 +65,10 @@ augustow = PlaceGroup(
 
 suwalki = PlaceGroup(
     places=[
-        Place("Suwałki, Augustów, Kingdom of Poland, Russian Empire", 6427, 1816, 1866),
-        Place("Suwałki, Suwałki, Suwałki, Kingdom of Poland, Russian Empire", 4322, 1867, 1917,),
-        Place("Suwałki, Białystok, Poland", 1220, 1918, 1999),
-        Place("Suwałki, Podlaskie, Poland", 1237, 1999),
+        Place("Suwałki, Augustów, Kingdom of Poland, Russian Empire", 6427, "1816", "1866"),
+        Place("Suwałki, Suwałki, Suwałki, Kingdom of Poland, Russian Empire", 4322, "1867", "1917"),
+        Place("Suwałki, Białystok, Poland", 1220, "1918", "1998"),
+        Place("Suwałki, Podlaskie, Poland", 1237, "1999"),
     ],
     search_strings=["suwalki", "Suwałki"],
     exclude_strings=["pu_sk", "sejny", "krasnopol", "klonorejsc", "filip_w", "Bilwinowo", "Kalvarija"],
@@ -76,10 +76,10 @@ suwalki = PlaceGroup(
 
 sejny = PlaceGroup(
     places=[
-        Place("Sejny, Białystok, New East Prussia, Kingdom of Prussia", 7207, 1795, 1806),
-        Place("Sejny, Sejny, Łomża, Duchy of Warsaw", 7206, 1807, 1815),
-        Place("Sejny, Sejny, Augustów, Kingdom of Poland, Russian Empire",5978,1816,1866,),
-        Place("Sejny, Sejny, Suwałki, Kingdom of Poland, Russian Empire", 4047, 1867, 1917),
+        Place("Sejny, Białystok, New East Prussia, Kingdom of Prussia", 7207, "1795", "1806"),
+        Place("Sejny, Sejny, Łomża, Duchy of Warsaw", 7206, "1807", "1815"),
+        Place("Sejny, Sejny, Augustów, Kingdom of Poland, Russian Empire",5978, "1816","1866",),
+        Place("Sejny, Sejny, Suwałki, Kingdom of Poland, Russian Empire", 4047, "1867", "1917"),
     ],
     search_strings=["sejny"],
     exclude_strings=["pu_sk"],
@@ -87,20 +87,20 @@ sejny = PlaceGroup(
 
 krasnopol = PlaceGroup(
     places=[
-        Place("Krasnopol, Podlaskie, Kingdom of Poland", 5200, 1569, 1795),
-        Place("Krasnopol, Białystok, New East Prussia, Kingdom of Prussia", 1585, 1795,1806,),
-        Place("Krasnopol, Dąbrowa, Łomża, Duchy of Warsaw", 2259, 1807, 1815),
-        Place("Krasnopol, Augustów, Kingdom of Poland, Russian Empire", 6896, 1816, 1867),
-        Place("Krasnopol, Sejny, Suwałki, Kingdom of Poland, Russian Empire", 458, 1867, 1914,),
-        Place("Krasnopol, Suwałki, Białystok, Poland", 5979, 1918, 1956),
+        Place("Krasnopol, Podlaskie, Kingdom of Poland", 5200, "1569", "1795"),
+        Place("Krasnopol, Białystok, New East Prussia, Kingdom of Prussia", 1585, "1795", "1806"),
+        Place("Krasnopol, Dąbrowa, Łomża, Duchy of Warsaw", 2259, "1807", "1815"),
+        Place("Krasnopol, Augustów, Kingdom of Poland, Russian Empire", 6896, "1816", "1867"),
+        Place("Krasnopol, Sejny, Suwałki, Kingdom of Poland, Russian Empire", 458, "1867", "1914"),
+        Place("Krasnopol, Suwałki, Białystok, Poland", 5979, "1918", "1956"),
     ],
     search_strings=["krasnopol"],
 )
 
 brooklyn = PlaceGroup(
     places=[
-        Place("Brooklyn, Kings, New York, United States", 5955, 1776, end_year=1898),
-        Place("Brooklyn, New York City, New York, United States", 5879, start_year=1898),
+        Place("Brooklyn, Kings, New York, United States", 5955, "1776", "1897"),
+        Place("Brooklyn, New York City, New York, United States", 5879, "1898", None),
     ],
     search_strings=["brooklyn%new york"],
     exclude_strings=["cemetery"],
@@ -108,15 +108,15 @@ brooklyn = PlaceGroup(
 
 monastir  = PlaceGroup(
     places=[
-        Place("Monastir, Ottoman Empire", 1986, end_year=1913), # < 9 Aug 1913
-        Place("Monastir, Serbia", 4564, 1913, 1918), # 10 Aug 1913 - 11 Nov 1918
-        Place("Monastir, Macedonia, Yugoslavia", 443, 1918, 1991), # 11 Nov 1918 - 8 Sep 1991
-        Place("Monastir, North Macedonia", 7133, 1991) # 8 Sep 1991 - Pres
+        Place("Monastir, Ottoman Empire", 1986, None, "1913-08-09"),
+        Place("Monastir, Serbia", 4564, "1913-08-10", "1918-11-11"),
+        Place("Monastir, Macedonia, Yugoslavia", 443, "1918-11-12", "1991-09-08"),
+        Place("Monastir, North Macedonia", 7133, "1991-09-09", None)
     ],
     search_strings=["monastir", "bitola"]
 )
 
-places = [krasnopol, suwalki, augustow, punsk, dvinsk]
+places = [krasnopol, suwalki, augustow, punsk, dvinsk, monastir]
 
 def fix_all(conn: Connection):
     for place in places:
@@ -132,7 +132,7 @@ def main():
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
     with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         fix_all(conn)
-        #dvinsk.fix_events(conn)
+        # monastir.fix_events(conn)
 
 
 # ===================================================DIV60==
