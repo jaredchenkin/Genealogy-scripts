@@ -3,7 +3,9 @@ from pathlib import Path
 from sqlite3 import Connection, Cursor, Row
 from collections import defaultdict
 from datetime import date
+import itertools
 import logging
+import requests
 
 sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1] / "RMpy package")))
 import RMpy.common as RM  # noqa #type: ignore
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class Place:
     def __init__(
-        self, name: str, rmid: int = 0, start_date: str = None, end_date: str = None
+        self, name: str, rmid: int = None, start_date: str = None, end_date: str = None
     ):
         """
         A date-specific standardized place
@@ -25,20 +27,86 @@ class Place:
                 (The 4th of 2005 doesn't make sense anyway...).
             end_date (str|None): [Optional] See start_date
         """
-        def date_normalize(date_string, end=False):
-            if date_string != None:
-                parts = date_string.split('-')
-                defaults = ['13', '32'] if end else ['00', '00']
-                return '-'.join(parts + defaults[len(parts) - 1:])
-
         self.name = name
         self.rmid = rmid
 
         if not start_date and not end_date:
             logger.warning(f"{name} has no start or end year, will be used for all time/events.")
-        self.start_date = date_normalize(start_date)
-        self.end_date = date_normalize(end_date, True)
+        self.start_date = self.date_normalize(start_date)
+        self.end_date = self.date_normalize(end_date, True)
 
+    def date_normalize(self, date_string, end=False):
+        if date_string != None:
+            parts = date_string.split('-')
+            defaults = ['13', '32'] if end else ['00', '00']
+            return '-'.join(parts + defaults[len(parts) - 1:])
+
+    def create(self, conn: Connection):
+        sql = """\
+INSERT INTO PlaceTable (
+    PlaceType, Name, Abbrev, Normalized, Latitude, Longitude, LatLongExact, MasterID, Note, Reverse, fsID, anID, UTCModDate
+) VALUES (
+    0, ?, "", "", 0, 0, 0, 0, ?, "", 0, 0, julianday('now') - 2415018.5
+)
+"""
+        cur = conn.execute(sql, (self.name, f"Use {self.date_string()}"))
+        self.rmid = cur.lastrowid
+        return self.rmid
+
+    def date_string(self):
+        def denormalize(s):
+            parts = s.split('-')
+
+            if parts[-1] == '00' or parts[-1] == '32':
+                parts.pop()
+
+            if parts[-1] == '00' or parts[-1] == '13':
+                parts.pop()
+
+            return '-'.join(parts)
+
+        dates = (self.start_date, self.end_date)
+        match dates:
+            case (None, e):
+                return f"before {denormalize(e)}"
+            case (s, None):
+                return f"after {denormalize(s)}"
+            case (s, e):
+                return f"between {denormalize(s)} and {denormalize(e)}"
+
+class FSPlace(Place):
+    def __init__(
+            self,
+            place_id: int,
+            start_date: str = None,
+            end_date: str = None
+    ):
+        self.place_id = place_id
+        place = self.get_fs_place(place_id)
+        name = place["display"]["fullName"]
+        if not start_date and not end_date:
+            dates = place["temporalDescription"]["formal"].split("/")
+            if dates[0] != "":
+                start_date = dates[0][1:]
+            if dates[1] != "":
+                end_date = dates[1][1:]
+
+        super().__init__(name=name, start_date=start_date, end_date=end_date)
+
+
+    def get_fs_place(self, id):
+        url = f"https://api.familysearch.org/platform/places/description/{id}"
+        headers = {
+            "Accept": "application/json",
+            "Accept-Language":"en"
+        }
+        r = requests.get(url, headers=headers)
+        r.raise_for_status()
+        data: dict = r.json()
+        places = data.get("places", [])
+        if not places:
+            raise RM.RM_Py_Exception(f"can't find FS place with id {id}")
+        return places[0]
 
 class PlaceGroup:
     def __init__(
@@ -52,7 +120,7 @@ class PlaceGroup:
 
         Args:
             places (list[Place]): All the places to process for this group
-            search_strings (list[str]): [Optional] Strings to use when finding places in RM to standardize
+            search_strings (list[str]): Strings to use when finding places in RM to standardize
             exclude_strings (list[str]): [Optional] Strings to exclude from search results
         
         """
@@ -82,6 +150,8 @@ class PlaceGroup:
         # place.exclude_strings is optional, so could override, define, or do nothing
         if len(exclude_strings) == 0:
             exclude_strings = self.exclude_strings
+
+        self.__get_place_ids__(conn)
 
         for place in self.places:
             (old_names, named_events) = self._find_events(conn, place, search_strings, exclude_strings)
@@ -148,33 +218,12 @@ WHERE et.PlaceID != ?
             old_names[r["Name"]] = r["PlaceID"]
 
         if (len(rows) > 0):
-            print(f"Found {len(rows)} events {self._date_string(place)} with the following places for converting to '{place.name}':")
+            print(f"Found {len(rows)} events {place.date_string()} with the following places for converting to '{place.name}':")
         else:
-            print(f"No events found {self._date_string(place)} for {place.name}")
+            print(f"No events found {place.date_string()} for {place.name}")
 
         return (old_names, named_events)
 
-
-    def _date_string(self, place: Place):
-        def denormalize(s):
-            parts = s.split('-')
-
-            if parts[-1] == '00' or parts[-1] == '32':
-                parts.pop()
-
-            if parts[-1] == '00' or parts[-1] == '13':
-                parts.pop()
-
-            return '-'.join(parts)
-
-        dates = (place.start_date, place.end_date)
-        match dates:
-            case (None, e):
-                return f"before {denormalize(e)}"
-            case (s, None):
-                return f"after {denormalize(s)}"
-            case (s, e):
-                return f"between {denormalize(s)} and {denormalize(e)}"
 
     def _pick_events(self, old_names, named_events):
         for i, n in enumerate(named_events.keys()):
@@ -189,6 +238,7 @@ WHERE et.PlaceID != ?
         skiplist = [
             int(t) - 1 for t in resp.split(",") if t.strip().isdigit() and int(t) >= 1
         ]
+
         for i in skiplist:
             on = list(old_names.keys())
             if i < len(on):
@@ -217,19 +267,26 @@ UPDATE EventTable
 
     # TODO
     def __get_place_ids__(self, conn: Connection):
-        placeholders = ", ".join(["(?)"] * len(self.places))
+        sorted_places = sorted([p for p in self.places if p.rmid == None],key=lambda x: x.name)
+        
+        if(len(sorted_places) == 0):
+            return
+
+        placeholders = ", ".join(["(?)"] * len(sorted_places))
         sql = f"""\
             WITH names(name) AS (
                 VALUES {placeholders}
             )
-            SELECT pt.id
+            SELECT pt.Name, pt.PlaceID
             FROM names
             LEFT JOIN PlaceTable pt ON pt.name = names.name
             WHERE pt.Note != ''
+            ORDER BY pt.Name ASC
             """
-        rows = conn.execute(sql, [p.name for p in self.places])
-        for place, row in zip(self.places, rows):
-            if row[0] is None:
-                pass
+
+        rows = conn.execute(sql, [p.name for p in sorted_places])
+        for place, row in itertools.zip_longest(sorted_places, rows):
+            if row is None or row[0] is None:
+                place.create(conn)
             else:
-                place.id = row[0]
+                place.rmid = row['PlaceID']

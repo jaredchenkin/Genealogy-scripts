@@ -80,6 +80,8 @@ sejny = PlaceGroup(
         Place("Sejny, Sejny, Łomża, Duchy of Warsaw", 7206, "1807", "1815"),
         Place("Sejny, Sejny, Augustów, Kingdom of Poland, Russian Empire",5978, "1816","1866",),
         Place("Sejny, Sejny, Suwałki, Kingdom of Poland, Russian Empire", 4047, "1867", "1917"),
+        Place("Sejny, Suwałki, Białystok, Poland",start_date="1918",end_date="1945"),
+        Place("Sejny, Suwałki, Poland",start_date="1975",end_date="1999")
     ],
     search_strings=["sejny"],
     exclude_strings=["pu_sk"],
@@ -93,6 +95,7 @@ krasnopol = PlaceGroup(
         Place("Krasnopol, Augustów, Kingdom of Poland, Russian Empire", 6896, "1816", "1867"),
         Place("Krasnopol, Sejny, Suwałki, Kingdom of Poland, Russian Empire", 458, "1867", "1914"),
         Place("Krasnopol, Suwałki, Białystok, Poland", 5979, "1918", "1956"),
+        Place("Krasnopol, Sejny, Białystok, Poland", None, "1957", "1975")
     ],
     search_strings=["krasnopol"],
 )
@@ -131,8 +134,8 @@ def main():
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
     with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
-        fix_all(conn)
-        # monastir.fix_events(conn)
+        # fix_all(conn)
+        sejny.fix_events(conn)
 
 
 # ===================================================DIV60==
