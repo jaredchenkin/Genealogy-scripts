@@ -3,6 +3,8 @@
 Hi 👋 I'm Jared and I've forked Richard's repo so I can make some customized workflows for my RM database.
 Having all of this work to use as inspiration is immensely helpful. Cheers! 🍻
 
+## Common library and config changes
+
 I have done some small reorganizating to make things a bit more DRY and reusable for me.
 A major organization change revolves around the fact that my first script was [`Lump-FS-Sources.py`](./Lump%20sources/Misc%20specific%20sources/Lump-FS-Sources.py),
 which I modeled after the other Lump sources scripts in that directory.
@@ -10,14 +12,30 @@ Those scripts just run the main() function directly and bypass launcher.
 That led me to move more connection handling and configuration logic into [`common.py`](./RMpy%20package/RMpy/common.py).
 Now, the `create_db_connection` wraps the sqlite file handling directly, and utilizes python's context manager, so you can do:
 
+One thing about the original setup was having config files in each directory, and having to change the database location
+if you moved between folders. I made a helper method `get_config()` in `common.py` that looks for a `config.ini` in the repository root and returns the `ConfigParser` of that. After that, it looks for any .ini file in the directory of the running
+script and merges that in. For ConfigParser, subsequent file reads overwrite prior configurations, so the local directory .ini
+will have priority over the `$root/config.ini`. In my setup, since I'm on linux I have `prod.ini` and `test.ini` that I symlink to `config.ini`.
+
 ```python
-with create_db_connection(db_path, [RMNOCASE_Path]) as conn:
+config = common.get_config()
+
+# Keys from your .ini file
+db_path = config["FILE_PATHS"]["..."]
+RMNOCASE_Path = config["FILE_PATHS"]["..."]
+
+with create_db_connection2(db_path, RMNOCASE_Path) as conn:
     do_stuff(conn, *other_args)
 ```
+
+## My stuff
 
 My scripts aren't as polished, and they aren't meant to be. Some are very specific with hardcoded stuff and not meant to be reused for anything else. Other's are maybe good for inspiration. Here is a current list of scripts I've written or files I've worked on:
 
 ```sh
+📁 Customization
+├─📄 facts.py
+├─📄 source_templates.py
 📁 External_Sources
 ├─📄 make_website_citation.py
 📁 FS_Person_Source
@@ -31,21 +49,18 @@ My scripts aren't as polished, and they aren't meant to be. Some are very specif
 ├─📁 Misc specific sources
 │ ├─📄 Lump-FS-Sources.py
 │ └─📄 ReadMe-FS.md
+📁 Process_Ancestry_Links
+├─📄 tree_linker.py
 📁 RMpy package
 ├─📁 RMpy
 │ ├─📄 common.py
 │ ├─📄 customizations.py
-│ └─📄 familysearch.py
+│ ├─📄 facts.py
+│ ├─📄 familysearch.py
+│ └─📄 source_template.py
 ├─📄 config.ini
 └─📄 requirements.txt
 ```
-
-## Config
-
-One thing about the original setup was having config files in each directory, and having to change the database location
-if you moved between folders. I made a helper method `get_config()` in `common.py` that looks for a `config.ini` in the repository root and returns the `ConfigParser` of that. After that, it looks for any .ini file in the directory of the running
-script and merges that in. For ConfigParser, subsequent file reads overwrite prior configurations, so the local directory .ini
-will have priority over the `$root/config.ini`. In my setup, since I'm on linux I have `prod.ini` and `test.ini` that I symlink to `config.ini`.
 
 Now, back to @RichardOtter...
 
