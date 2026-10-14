@@ -6,7 +6,7 @@ from datetime import datetime
 import sqlite3
 import ctypes
 
-from sqlite3 import Connection, DatabaseError
+from sqlite3 import Connection, DatabaseError, Cursor
 from contextlib import contextmanager
 from typing import Any, Generator
 import configparser
@@ -38,7 +38,7 @@ def create_db_connection(db_file_path, db_extension_file_path_list):
 
 @contextmanager
 def create_db_connection2(
-    db_file_path, db_extension_file_path_list
+    db_file_path, *db_extension_file_path_list
 ) -> Generator[Connection, Any, None]:
     """Manages the RootsMagic database file object and tries to gracefully handle errors
 
@@ -199,6 +199,15 @@ class RM_Py_Exception(Exception):
 
 # ===================================================DIV60==
 
+def get_first(cur: Cursor, type: str = "", name: str = ""):
+    res = cur.fetchone()
+    if res:
+        if type and name:
+            logger.debug(f"Found {type} with {name} {res[0]}")
+        return res[0]
+    else:
+        return None
+
 
 class OwnerType(enum.IntEnum):
     PERSON = 0
@@ -207,119 +216,10 @@ class OwnerType(enum.IntEnum):
     SOURCE = 3
     CITATION = 4
     PLACE = 5
+    TASK = 6
     NAME = 7
     MEDIA = 11
-
-
-class FieldType(enum.StrEnum):
-    TEXT = "Text"
-    NAME = "Name"
-    PLACE = "Place"
-    DATE = "Date"
-
-
-class SourceTemplateField:
-    def __init__(
-        self,
-        name: str,
-        type: FieldType,
-        display: str = None,
-        citation: bool = False,
-        hint: str = None,
-        long_hint: str = None,
-    ) -> None:
-        self.name = name
-        self.type = type
-        self.display = display
-        self.hint = hint
-        self.long_hint = long_hint
-        self.citation = citation
-
-    def to_xml(self):
-        field = ET.Element("Field")
-        ET.SubElement(field, "FieldName").text = self.name
-        ET.SubElement(field, "DisplayName").text = (
-            self.display if self.display else self.name
-        )
-        ET.SubElement(field, "Type").text = self.type
-        if self.hint:
-            ET.SubElement(field, "Hint").text = self.hint
-        if self.long_hint:
-            ET.SubElement(field, "LongHint").text = self.long_hint
-        ET.SubElement(field, "CitationField").text = str(self.citation)
-
-        return field
-
-
-class SourceTemplate:
-    def __init__(
-        self,
-        name: str,
-        fields: list[SourceTemplateField] = [],
-        description: str = "",
-        category: str = "",
-        footnote: str = "",
-        bibliography: str = "",
-        short_footnote: str = "",
-    ) -> None:
-        self.name = name
-        self.fields = fields
-        self.description = description
-        self.category = category
-        self.footnote = footnote
-        self.bibliography = bibliography
-        self.short_footnote = short_footnote
-
-    def to_xml(self):
-        root = ET.Element("Root")
-        if self.fields:
-            fields = ET.SubElement(root, "Fields")
-            fields.extend([f.to_xml() for f in self.fields])
-        return root
-
-    def create(self, conn: Connection) -> int:
-        sql = """\
-INSERT INTO SourceTemplateTable (
-  Name, Description, Favorite, Category, Footnote, ShortFootnote, Bibliography, FieldDefs, UTCModDate
-) VALUES (
-  ?, ?, 0, ?, ?, ?, ?, ?, julianday('now') - 2415018.5
-)
-"""
-        template_id = -1
-
-        exists = find_source_template(conn, self.name)
-        if exists:
-            template_id = exists
-
-        else:
-            cur = conn.execute(
-                sql,
-                (
-                    self.name,
-                    self.description,
-                    self.category,
-                    self.footnote,
-                    self.short_footnote,
-                    self.bibliography,
-                    ET.tostring(self.to_xml()),
-                ),
-            )
-
-            if cur.lastrowid:
-                template_id = cur.lastrowid
-
-        return template_id
-
-
-def find_source_template(conn: Connection, name):
-    sql = "SELECT TemplateID FROM SourceTemplateTable where Name = ?"
-    cur = conn.execute(sql, (name,))
-    res = cur.fetchone()
-    if res:
-        return res[0]
-    else:
-        return None
-
+    ASSOC = 19
 
 # ===================================================DIV60==
 
@@ -409,27 +309,26 @@ VALUES (
         raise RM_Py_Exception(
             f"unable to create new source {name} {template_id}\n{ET.tostring(root)}"
         )
-    if verbose:
-        logger.info(f"Created new source with ID {source_id}")
+    logger.debug(f"Created new source with ID {source_id}")
     if url:
         add_weblink(conn, "", url, source_id, OwnerType.SOURCE)
     return source_id
 
 
-def get_source(conn: Connection, name, verbose=False):
+def get_source_by_name(conn: Connection, name):
     sql = "SELECT SourceID FROM SourceTable WHERE Name = ?"
-    cur = conn.execute(sql, (name,))
-    res = cur.fetchone()
-    if res:
-        if verbose:
-            logger.info(f"Found Source with ID {res[0]}")
-        return res[0]
-    else:
-        return None
+    return get_source(conn, sql, name)
+
+def get_source_by_refn(conn: Connection, ref_num):
+    sql = "SELECT SourceID FROM SourceTable WHERE RefNumber = ?"
+    return get_source(conn, sql, ref_num)
+
+def get_source(conn, sql, q):
+    cur = conn.execute(sql, (q,))
+    return get_first(cur, "Source", "ID")
 
 
 def delete_source(conn: Connection, source_id):
-    # Remove the old source
     sql_delete = "DELETE from SourceTable WHERE SourceID = ?"
     conn.execute(sql_delete, (source_id,))
 
@@ -681,7 +580,7 @@ ORDER BY st.Name COLLATE NOCASE;
 # People/Names
 
 
-def get_primary_name(conn, rm_id: int) -> tuple[int, str]:
+def get_primary_name(conn, person_id: int) -> tuple[int, str]:
     """Gets the primary name for a person by ID
 
     Args:
@@ -692,7 +591,7 @@ def get_primary_name(conn, rm_id: int) -> tuple[int, str]:
         (tuple[int,str]): name_id, full_name
     """
     sql = "SELECT NameID, format('%s %s', Given, Surname) AS Name FROM NameTable WHERE IsPrimary = 1 AND OwnerID = ?"
-    cur = conn.execute(sql, (rm_id,))
+    cur = conn.execute(sql, (person_id,))
     row = cur.fetchone()
     if row:
         return (row["NameID"], row["Name"])

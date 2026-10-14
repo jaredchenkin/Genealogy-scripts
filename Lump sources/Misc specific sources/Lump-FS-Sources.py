@@ -37,7 +37,7 @@ def main():
     # Process the database
     with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
 
-        fs_template_id = "439"  # get_or_create_fs_template(conn)
+        fs_template_id = "101"  # get_or_create_fs_template(conn)
         fs_repo_id = FS.get_or_create_fs_repo(conn)
         fs_sources = FS.get_existing_sources(conn)
 
@@ -192,7 +192,7 @@ def parse_citation(fields: str) -> list[str]:
 
 
 def create_citation_fields(citation, new_template_id):
-    if new_template_id == "439":
+    if new_template_id == "101":
         # Ancestry Source builtin
         root = FS.create_xml_fields({"Page": citation})
     elif new_template_id == "43":

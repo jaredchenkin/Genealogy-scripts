@@ -23,7 +23,7 @@ def main():
     updated = []
 
     # Process the database
-    with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
+    with RM.create_db_connection2(database_Path, RMNOCASE_Path) as conn:
         cur = conn.cursor()
 
         fs_source_id = get_or_create_fs_person_source(conn)
@@ -107,7 +107,7 @@ def get_or_create_fs_person_source(conn: Connection) -> int:
 
 
 def create_fs_person_source(conn: Connection, name, repo_id):
-    template_id = 439  # Ancestry Source template builtin
+    template_id = 101  # Ancestry Source template builtin
     fields = make_source_fields(name)
     source_id = RM.create_source(conn, name, template_id, fields)
     RM.link_source_to_repo(conn, source_id, repo_id)
