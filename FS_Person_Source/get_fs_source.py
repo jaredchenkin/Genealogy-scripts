@@ -6,16 +6,11 @@ import re
 from urllib.parse import urlsplit, SplitResult
 import xml.etree.ElementTree as ET
 import signal
-import sqlite3
 from getmyancestors.classes.tree import Tree, Source, Indi
 from getmyancestors.classes.session import Session
 
 sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1] / "RMpy package")))
-sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1])))
-import RMpy.common as RM  # noqa #type: ignore
-import RMpy.RMDate as RMdate  # noqa #type: ignore
-import RMpy.familysearch as FS
-import Customizations.customizations as Cust
+from RMpy import common as RM, RMDate as RMDate, familysearch as FS, customization as Cust
 
 
 def sigint_handler(sig, frame):
@@ -32,7 +27,7 @@ def main():
 
     try:
         parser.error = parser.exit
-        args = parser.parse_args(["GMGG-2W5"])
+        args = parser.parse_args()
     except SystemExit:
         parser.print_help(file=sys.stderr)
         sys.exit(2)
@@ -244,11 +239,11 @@ def get_fs_source_target(sources: list[Source]) -> Source:
 def get_rmid_from_fsid(conn: Connection, fsid: str):
     sql = "SELECT rmID FROM FamilySearchTable WHERE fsID = ?"
     cur = conn.execute(sql, (fsid,))
-    res = cur.fetchone()
-    if res:
-        return res[0]
-    else:
+    res = RM.get_first(cur, "Person", "FS ID")
+    if res == None:
         raise RM.RM_Py_Exception("Can't find person with FSID " + fsid)
+    else:
+        return res
 
     """
   Notes on FamilySearch API object structure that isn't obvious/documented
@@ -339,7 +334,7 @@ def process_source(
                 principal_name, citation_fields, source_info, fs_source
             )
         case _:
-            source_id = make_new_source(conn, source_name, source_root, 1)  # TODO: Fix : 1 is not Freeform Source
+            source_id = make_new_source(conn, source_name, source_root, 0)
 
     print(f"Using source {source_name} with source ID {source_id}")
 
@@ -384,7 +379,7 @@ def create_us_fed_census_source(
 
 
 def create_vitals_source(conn, source_name, source_root, source_info, collection_url):
-    template_id = RM.find_source_template(conn, Cust.VITAL_RECORDS)
+    template_id = Cust.VITAL_RECORDS.find(conn)
     if template_id is None:
         raise RM.RM_Py_Exception(f"Unable to find source template with name ${Cust.VITAL_RECORDS}")
     new_source_fields = make_vital_source_fields(source_info)
