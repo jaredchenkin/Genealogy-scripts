@@ -4,19 +4,18 @@ from pathlib import Path
 import argparse
 from urllib import parse
 import re
+import requests
+from bs4 import BeautifulSoup
 
 sys.path.append(str(Path.resolve(Path(__file__).resolve().parents[1] / "RMpy package")))
 import RMpy.common as RM  # noqa #type: ignore
 
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("rm_id", type=int, help="RootsMagic Person ID Number")
-    # parser.add_argument("name", type=str, help="Name of the person")
     subparsers = parser.add_subparsers(required=True)
 
     rafalin = subparsers.add_parser("r", help="Rafalin/Rafael book")
+    rafalin.add_argument("rm_id", type=int, help="RootsMagic Person ID Number")
     rafalin.add_argument("name", type=str, help="Name of the person in the book")
     rafalin.add_argument("page", type=int, help="Page number in the Rafalin Book")
     rafalin.add_argument(
@@ -25,6 +24,7 @@ def main():
     rafalin.set_defaults(func=process_rafalin)
 
     monastirli = subparsers.add_parser("m", help="Cassorla.net Trees")
+    monastirli.add_argument("rm_id", type=int, help="RootsMagic Person ID Number")
     monastirli.add_argument("name", type=str, help="Name of the person on the website")
     monastirli.add_argument(
         "page",
@@ -34,27 +34,17 @@ def main():
     monastirli.set_defaults(func=process_monastirli)
 
     yad_vashem = subparsers.add_parser("y", help="Yad Vashem Shoah Names DB")
-    yad_vashem.add_argument("name", type=str, help="Name of the person in the DB")
-    yad_vashem.add_argument(
-        "ref_num", type=int, help="Reference Number to record on USHMM"
-    )
-    yad_vashem.add_argument("url", type=str, help="URL to the website")
+    yad_vashem.add_argument("rm_id", type=int, help="RootsMagic Person ID Number")
+    yad_vashem.add_argument("name", type=str, help="Name of the person on Yad Vashem")
+    yad_vashem.add_argument("ref_num", type=int, help="Reference Number to record on Yad Vashem")
     yad_vashem.set_defaults(func=process_yad_vashem)
 
     ushmm = subparsers.add_parser("u", help="US Holocaust Museum photos")
-    ushmm.add_argument("ref_num", type=int, help="Reference Number to record on USHMM")
-    ushmm.add_argument("url", type=str, help="URL to the picture page")
-    ushmm.add_argument(
-        "more_rm_ids", type=int, help="Additional RM people IDs to link to", nargs="*"
-    )
+    ushmm.add_argument("page", type=str, help="Page number from USHMM url")
+    ushmm.add_argument("rm_ids", type=int, help="List of RM people IDs to link to", nargs="+")
     ushmm.set_defaults(func=process_ushmm)
 
-    try:
-        parser.error = parser.exit
-        args = parser.parse_args()
-    except SystemExit:
-        parser.print_help(file=sys.stderr)
-        sys.exit(2)
+    args = parser.parse_args()
 
     config = RM.get_config()
     args.func(args, config)
@@ -99,7 +89,7 @@ def check_link_exists(conn, source_id, rm_id, name):
 
 def get_or_create_rafalin_source(conn) -> int:
     name = "The Raphael/Rafalin family"
-    source_id = RM.get_source(conn, name)
+    source_id = RM.get_source_by_name(conn, name)
     if not source_id:
         url = "https://www.familysearch.org/library/books/records/item/114611-the-raphael-rafalin-family-jewish-roots-in-punsk-poland-and-vicinity-including-krasnopol-kalwaria-sejny-augustow-suwalki-filipow-and-klonorejsc"
 
@@ -177,7 +167,7 @@ def process_monastirli(args, config):
 def get_or_create_cassorla_source(conn) -> int:
     name = "Descendants of the Sefaradim of Monastir and the Ottoman Lands"
 
-    source_id = RM.get_source(conn, name, True)
+    source_id = RM.get_source_by_name(conn, name, True)
     if not source_id:
         url = "https://cassorla.net"
         fields = {
@@ -208,7 +198,7 @@ def process_yad_vashem(args, config):
 
 def get_or_create_yad_vashem_source(conn, uri):
     name = "Yad Vashem Shoah Names DB"
-    source_id = RM.get_source(conn, name, True)
+    source_id = RM.get_source_by_name(conn, name, True)
     if not source_id:
         fields = {
             "Author": "Yad Vashem",
@@ -225,7 +215,27 @@ def get_or_create_yad_vashem_source(conn, uri):
 
 def process_ushmm(args, config):
     base_uri = "https://collections.ushmm.org"
-    subject = input("Enter full subject title from site: ")
+
+    page_uri = f"{base_uri}/search/catalog/{args.page}"
+    page = requests.get(page_uri)
+    content = page.text
+    soup = BeautifulSoup(content, features="html.parser")
+    subject = soup.select('#full-width-digital header div')[0].text
+
+    m = re.search(r"^Portrait of ([^.]+)\.", subject)
+    if m:
+        citation_name = m[1]
+    else:
+        citation_name = input("Couldn't extract subject name, enter here: ")
+
+
+    ids = soup.find(id="record-identifiers").text
+    m = re.search(r"Photograph Number: (\d+)", ids)
+    if m:
+        ref_num = m[1]
+    else:
+        ref_num = ""
+
     fields = {
         "Type": "Portrait",
         "Subject": subject,
@@ -234,33 +244,27 @@ def process_ushmm(args, config):
         "AccessType": "",
         "AccessDate": "",
     }
-    m = re.search(r"^Portrait of ([^.]+)\.", subject)
-    if m:
-        citation_name = m[1]
-    else:
-        citation_name = input("Couldn't extract subject name, enter here: ")
 
     database_Path = config["FILE_PATHS"]["DB_PATH"]
     RMNOCASE_Path = config["FILE_PATHS"]["RMNOCASE_PATH"]
     with RM.create_db_connection2(database_Path, [RMNOCASE_Path]) as conn:
         source_id = get_or_create_ushmm_source(conn, base_uri)
+        
         citation_id = RM.create_citation(
-            conn, source_id, args.ref_num, citation_name, fields, args.url
+            conn, source_id, ref_num, citation_name, fields, page_uri
         )
-        RM.create_citation_link(conn, citation_id, args.rm_id, RM.OwnerType.PERSON)
-
-        if args.more_rm_ids:
-            size = len(args.more_rm_ids)
-            RM.create_citation_links(conn,
-                citation_ids=[citation_id] * size,
-                owner_types= [RM.OwnerType.PERSON] * size,
-                owners=args.more_rm_ids
-            )
+        
+        size = len(args.rm_ids)
+        RM.create_citation_links(conn,
+            citation_ids=[citation_id] * size,
+            owner_types= [RM.OwnerType.PERSON] * size,
+            owners=args.rm_ids
+        )
 
 
 def get_or_create_ushmm_source(conn, uri):
     name = "The Jews in Macedonia during the Second World War (1941-1945), Vol.II - Kolonomos, Zhamila"
-    source_id = RM.get_source(conn, name, True)
+    source_id = RM.get_source_by_name(conn, name, True)
     if not source_id:
         fields = {
             "Collection": name,
